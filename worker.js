@@ -1079,7 +1079,7 @@ function paymentCopyButtons(text, amount) {
   const cards = paymentCardMatches(text);
   const rows = [];
   if (cards.length === 1) rows.push([{ text: "📋 کپی شماره کارت", copy_text: { text: cardDigits(cards[0][0]) } }]);
-  if (Number.isSafeInteger(amount) && amount >= 0) rows.push([{ text: "📋 کپی مبلغ (تومان)", copy_text: { text: String(amount) } }]);
+  if (Number.isSafeInteger(amount) && amount >= 0 && Number.isSafeInteger(amount * 10)) rows.push([{ text: "📋 کپی مبلغ به ریال", copy_text: { text: String(amount * 10) } }]);
   return rows;
 }
 
@@ -1178,7 +1178,7 @@ async function serverInvoice(env, db, chatId, tgId, token) {
   const st = await getSettings(db);
   await db.prepare("INSERT OR IGNORE INTO wallet_quotes(token,tg_id,kind,amount,created) VALUES(?,?,'server',?,?)").bind(token, tgId, d.amount, Date.now()).run();
   const balance = await walletBalance(db, tgId);
-  return tg(env, "sendMessage", { chat_id: chatId, parse_mode: "HTML", text: `🧾 صورت‌حساب سفارش سرور\n━━━━━━━━━━━━━━━━\n${serverDetails(d, true)}\n━━━━━━━━━━━━━━━━\n💼 موجودی کیف پول: ${serverPrice(balance)} تومان\n\n${escapeTelegramHtml(formatPaymentText(st.pay_text))}\n\nبا کیف پول کل مبلغ را پرداخت کنید یا بعد از پرداخت کارت‌به‌کارت عکس رسید را بفرستید. تحویل توسط پشتیبانی دستی است.`,
+  return tg(env, "sendMessage", { chat_id: chatId, parse_mode: "HTML", text: `🧾 صورت‌حساب سفارش سرور\n━━━━━━━━━━━━━━━━\n${serverDetails(d, true)}\n━━━━━━━━━━━━━━━━\n💼 موجودی کیف پول: ${serverPrice(balance)} تومان\n\n${escapeTelegramHtml(formatPaymentText(st.pay_text))}\n\nقیمت بالا به تومان است؛ دکمه کپی مبلغ، معادل آن را به ریال کپی می‌کند.\nبا کیف پول کل مبلغ را پرداخت کنید یا بعد از پرداخت کارت‌به‌کارت عکس رسید را بفرستید. تحویل توسط پشتیبانی دستی است.`,
     reply_markup: { inline_keyboard: [[{ text: "💼 پرداخت کامل با کیف پول", callback_data: `wp:${token}` }], ...paymentCopyButtons(st.pay_text, d.amount)] },
   });
 }
@@ -1292,7 +1292,7 @@ async function startTopup(env, db, chatId, tgId, amount) {
   await db.prepare("INSERT INTO pending_buy(tg_id,plan,code,ts,topup) VALUES(?,NULL,NULL,?,?) ON CONFLICT(tg_id) DO UPDATE SET plan=NULL, code=NULL, topup=excluded.topup, ts=excluded.ts, use_wallet=0")
     .bind(tgId, Date.now(), amount).run();
   const st = await getSettings(db);
-  return reply(`💼 شارژ کیف پول به مبلغ ${fa(amount)} تومان\n\n${formatPaymentText(st.pay_text)}\n\nبعد از پرداخت، عکس رسید رو همین‌جا بفرست. بعد از تأیید ادمین، مبلغ به کیف پولت اضافه می‌شه.`, { reply_markup: { inline_keyboard: paymentCopyButtons(st.pay_text, amount) } });
+  return reply(`💼 شارژ کیف پول به مبلغ ${fa(amount)} تومان\n\n${formatPaymentText(st.pay_text)}\n\nمبلغ بالا به تومان است؛ دکمه کپی، مبلغ را به ریال کپی می‌کند.\nبعد از پرداخت، عکس رسید رو همین‌جا بفرست. بعد از تأیید ادمین، مبلغ به کیف پولت اضافه می‌شه.`, { reply_markup: { inline_keyboard: paymentCopyButtons(st.pay_text, amount) } });
 }
 
 async function sendPlans(env, db, chatId) {
@@ -1329,7 +1329,7 @@ async function choosePlan(env, db, chatId, tgId, key) {
     .bind(tgId, key, Date.now()).run();
   const row = await pendingCode(db, tgId);
   const price = priceAfter(plan, row);
-  await reply(`✅ پلن «${plan.name}» (${fa(plan.days)} روز) انتخاب شد.\n💰 مبلغ: ${fa(price)} تومان${row ? ` (با کد ${row.code})` : ""}\n\n${formatPaymentText(st.pay_text)}\n\nبعد از پرداخت، عکس رسید رو همین‌جا بفرست.`, { reply_markup: { inline_keyboard: paymentCopyButtons(st.pay_text, price) } });
+  await reply(`✅ پلن «${plan.name}» (${fa(plan.days)} روز) انتخاب شد.\n💰 مبلغ: ${fa(price)} تومان${row ? ` (با کد ${row.code})` : ""}\n\n${formatPaymentText(st.pay_text)}\n\nمبلغ بالا به تومان است؛ دکمه کپی، مبلغ را به ریال کپی می‌کند.\nبعد از پرداخت، عکس رسید رو همین‌جا بفرست.`, { reply_markup: { inline_keyboard: paymentCopyButtons(st.pay_text, price) } });
   return walletOffer(env, db, chatId, tgId, plan, row);
 }
 

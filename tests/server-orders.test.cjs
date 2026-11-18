@@ -174,7 +174,7 @@ test('card and exact final amount can be copied from server invoice in left-to-r
   assert(invoice.text.includes('\u20666219861498296879\u2069'));
   const buttons = invoice.reply_markup.inline_keyboard.flat();
   assert.equal(buttons.find(b => b.text === '📋 کپی شماره کارت').copy_text.text, '6219861498296879');
-  assert.equal(buttons.find(b => b.text === '📋 کپی مبلغ (تومان)').copy_text.text, '75000');
+  assert.equal(buttons.find(b => b.text === '📋 کپی مبلغ به ریال').copy_text.text, '750000');
   assert(buttons.some(b => b.callback_data?.startsWith('wp:')));
 });
 test('copy buttons use the configured card and avoid ambiguous or malformed numbers', () => {
@@ -185,5 +185,5 @@ test('copy buttons use the configured card and avoid ambiguous or malformed numb
   assert.equal(buttons('کارت: 1234567890123456\nکارت: 1111222233334444').length, 1);
   assert.equal(buttons('کارت: 12345678901234567').length, 1);
   assert.equal(buttons('کارت: 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7').length, 1);
-  assert.equal(buttons('بدون شماره کارت')[0].copy_text.text, '123456');
+  assert.equal(buttons('بدون شماره کارت')[0].copy_text.text, '1234560');
 });
