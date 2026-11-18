@@ -19,8 +19,8 @@ function setup() {
   return { ctx, calls, db };
 }
 for (const [name, run, amount] of [
-  ['wallet top-up', (ctx, db) => ctx.startTopup({}, db, 7, '7', 200000), '200000'],
-  ['discounted subscription', (ctx, db) => ctx.choosePlan({}, db, 7, '7', 'm'), '135000'],
+  ['wallet top-up', (ctx, db) => ctx.startTopup({}, db, 7, '7', 200000), '2000000'],
+  ['discounted subscription', (ctx, db) => ctx.choosePlan({}, db, 7, '7', 'm'), '1350000'],
 ]) test(`${name} provides matching card and amount copy buttons`, async () => {
   const { ctx, calls, db } = setup();
   await run(ctx, db);
