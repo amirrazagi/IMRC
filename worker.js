@@ -228,6 +228,64 @@ const JOIN_KB = (token) => ({
   ],
 });
 
+/* ---------------- Telegram Mini App ---------------- */
+// Only Telegram-signed initData is trusted; initDataUnsafe is never accepted.
+async function verifyMiniInitData(raw, token, now = Date.now()) {
+  if (typeof raw !== "string" || raw.length > 8192 || !token) return null;
+  const params = new URLSearchParams(raw), seen = new Set();
+  for (const [key] of params) { if (seen.has(key)) return null; seen.add(key); }
+  const hash = params.get("hash"), ts = params.get("auth_date");
+  if (!hash || !/^[0-9a-f]{64}$/i.test(hash) || !ts || !/^\d{1,12}$/.test(ts)) return null;
+  const age = Math.floor(now / 1000) - Number(ts);
+  if (age < -30 || age > 86400) return null;
+  params.delete("hash");
+  const check = [...params.entries()].sort(([a], [b]) => a < b ? -1 : a > b ? 1 : 0).map(([k, v]) => `${k}=${v}`).join("\n");
+  const encoder = new TextEncoder();
+  const root = await crypto.subtle.importKey("raw", encoder.encode("WebAppData"), { name: "HMAC", hash: "SHA-256" }, false, ["sign"]);
+  const secret = await crypto.subtle.sign("HMAC", root, encoder.encode(token));
+  const key = await crypto.subtle.importKey("raw", secret, { name: "HMAC", hash: "SHA-256" }, false, ["verify"]);
+  const signature = Uint8Array.from(hash.match(/../g), h => parseInt(h, 16));
+  if (!(await crypto.subtle.verify("HMAC", key, signature, encoder.encode(check)))) return null;
+  try {
+    const user = JSON.parse(params.get("user") || "null");
+    if (!user || !Number.isSafeInteger(user.id) || user.id <= 0 || user.is_bot) return null;
+    return user;
+  } catch { return null; }
+}
+async function miniApi(request, env) {
+  if (!env.BOT_TOKEN) return json({ error: "unavailable" }, 503);
+  if (Number(request.headers.get("content-length") || 0) > 10000) return json({ error: "invalid" }, 400);
+  let body;
+  try { const text = await request.text(); if (text.length > 10000) return json({ error: "invalid" }, 400); body = JSON.parse(text); } catch { return json({ error: "invalid" }, 400); }
+  if (!body || typeof body !== "object") return json({ error: "invalid" }, 400);
+  const user = await verifyMiniInitData(body.initData, env.BOT_TOKEN);
+  if (!user) return json({ error: "auth" }, 401, { "Cache-Control": "no-store" });
+  const db = await getDB(env), id = String(user.id);
+  if (await isBanned(db, id)) return json({ error: "banned" }, 403);
+  if (!(await rateOk(db, "mini:" + id, 60, 60000))) return json({ error: "rate" }, 429);
+  if (body.action === "summary") {
+    const q = await quotaInfo(db, id);
+    return json({ name: String(user.first_name || "کاربر").slice(0, 80), username: String(user.username || "").slice(0, 32),
+      balance: await walletBalance(db, id), sub: q.sub, sub_until: q.sub_until, remaining: q.remaining, limit: q.limit, period: q.period }, 200, { "Cache-Control": "no-store" });
+  }
+  const allowed = new Set(["config", "configs", "server", "plans", "wallet", "invite", "support"]);
+  if (!allowed.has(body.action)) return json({ error: "invalid" }, 400);
+  if (!(await rateOk(db, "mini_action:" + id, 12, 60000))) return json({ error: "rate" }, 429);
+  // Bot messages, not payments, are initiated here. Existing bot handlers own the purchasing flow.
+  await db.prepare("UPDATE bot_state SET awaiting='' WHERE tg_id=? AND awaiting!=''").bind(id).run();
+  await db.prepare("DELETE FROM server_drafts WHERE tg_id=? AND stage IN ('volume','days','users')").bind(id).run();
+  let result;
+  if (body.action === "config") result = await cfgStart(env, db, id, id);
+  else if (body.action === "configs") result = await sendMyConfigs(env, db, id, id);
+  else if (body.action === "server") result = await sendServerShop(env, id);
+  else if (body.action === "plans") result = await sendPlans(env, db, id);
+  else if (body.action === "wallet") result = await sendWallet(env, db, id, id, "");
+  else if (body.action === "invite") result = await sendInvite(env, db, id, id);
+  else result = await tg(env, "sendMessage", { chat_id: id, text: SUPPORT_HELP }).catch(() => null);
+  if (!(result === true || (result && result.ok))) return json({ error: "delivery" }, 502);
+  return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+}
+
 /* ---------------- /api/auth/* ---------------- */
 async function authStart(env, request) {
   if (!env.BOT_TOKEN) return json({ error: "BOT_TOKEN تنظیم نشده" }, 500);
@@ -367,6 +425,7 @@ async function sendMainMenu(env, db, chatId, isAdminUser, text) {
     [{ text: "👤 حساب من", callback_data: "menu:me" }, { text: "📂 کانفیگ‌های من", callback_data: "menu:configs" }],
     [{ text: "🎁 دعوت دوستان", callback_data: "menu:invite" }, { text: "🎫 پشتیبانی", callback_data: "menu:support" }],
     [{ text: "🎟 کد تخفیف", callback_data: "menu:code" }],
+    [{ text: "✨ مینی‌اپ IMRC", web_app: { url: panelUrl + "/mini" } }],
   ];
   if (isAdminUser) keyboard.push([{ text: "🛠 پنل مدیریت", callback_data: "menu:admin" }, { text: "🎫 تیکت‌های باز", callback_data: "menu:tickets" }]);
   // تلگرام اجازه نمی‌دهد حذف کیبورد و دکمه‌های inline در یک پیام باشند.
@@ -529,8 +588,10 @@ async function cfgShow(env, db, tgId, chatId, st, screen) {
   if (!ok) {
     const r = await tg(env, "sendMessage", { chat_id: chatId, text: v.text, reply_markup: v.reply_markup }).catch(() => null);
     st.mid = r && r.ok ? r.result.message_id : 0;
+    ok = !!(r && r.ok);
   }
   await cfgSave(db, tgId, st);
+  return ok;
 }
 
 async function cfgStart(env, db, chatId, tgId) {
@@ -2633,13 +2694,17 @@ const CSP_REPORT = [
   "form-action 'self'",
   "object-src 'none'",
 ].join("; ");
-function secureHeaders(res) {
+function secureHeaders(res, request) {
   const h = new Headers(res.headers);
   h.set("X-Content-Type-Options", "nosniff");
   h.set("Referrer-Policy", "strict-origin-when-cross-origin");
-  h.set("X-Frame-Options", "DENY");
+  const miniPage = request && ["/mini", "/mini.html"].includes(new URL(request.url).pathname);
+  if (miniPage) {
+    h.delete("X-Frame-Options");
+    h.set("Content-Security-Policy", "frame-ancestors 'self' https://web.telegram.org https://*.telegram.org");
+  } else h.set("X-Frame-Options", "DENY");
   h.set("Permissions-Policy", "camera=(), microphone=(), geolocation=(), payment=()");
-  h.set("Content-Security-Policy-Report-Only", CSP_REPORT);
+  if (!miniPage) h.set("Content-Security-Policy-Report-Only", CSP_REPORT);
   return new Response(res.body, { status: res.status, statusText: res.statusText, headers: h });
 }
 
@@ -3146,12 +3211,13 @@ export default {
     try { await notifyExpiringFiles(env); } catch (e) { console.error("file alerts", e); }
   },
   async fetch(request, env) {
-    return secureHeaders(await this.route(request, env));
+    return secureHeaders(await this.route(request, env), request);
   },
   async route(request, env) {
     const url = new URL(request.url);
     const p = url.pathname;
     try {
+      if (p === "/api/mini" && request.method === "POST") return await miniApi(request, env);
       if (p === "/api/auth/start" && request.method === "POST") return await authStart(env, request);
       if (p === "/api/auth/check" && request.method === "GET") return await authCheck(env, url);
       if (p === "/api/tg/webhook" && request.method === "POST") return await tgWebhook(request, env);

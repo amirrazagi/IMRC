@@ -19,6 +19,7 @@ test('menu uses inline buttons, default panel link, and admin-only controls', as
   assert.equal(rows[0][0].callback_data, 'menu:server');
   assert.equal(rows[2][0].url, 'https://imrc.adgjl1113337u79.workers.dev');
   assert(!rows.flat().some(b => b.callback_data === 'menu:admin'));
+  assert.equal(rows.flat().find(b => b.web_app).web_app.url, 'https://imrc.adgjl1113337u79.workers.dev/mini');
   ctx.calls.length = 0;
   await ctx.sendMainMenu({ PUBLIC_URL: 'https://example.com/' }, {}, 1, true, 'hello');
   const adminRows = ctx.calls[1].payload.reply_markup.inline_keyboard;
