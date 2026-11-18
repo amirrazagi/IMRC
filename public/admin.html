@@ -1,0 +1,1156 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="dark">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="robots" content="noindex,nofollow"/>
+<meta name="theme-color" content="#0a0e16"/>
+<link rel="stylesheet" href="/panel.css"/>
+<title>IMRC • پنل مدیریت</title>
+<style>
+/* admin-only additions on top of panel.css tokens */
+.hide{display:none !important}
+.auth-card .frm{text-align:start}
+.auth-card input{width:100%;margin-top:.6rem;padding:.7rem .85rem;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2)}
+.auth-card .btn{margin-top:.6rem}
+.err{color:var(--danger);font-size:.88rem;min-height:1.3em;margin-top:.6rem}
+.adm-tabs{display:none}
+.side .brand small{display:block}
+.content{max-width:1180px}
+.page-h h2{font-size:1.25rem}
+.blk{margin-top:1.1rem}
+.blk-h{font-size:.95rem;font-weight:800;margin:0 0 .55rem;color:var(--text)}
+.blk-h + .card,.blk-h + .frm{margin-top:0}
+.card{margin-bottom:.2rem}
+.card + .card,.card + .frm,.frm + .card{margin-top:.7rem}
+.card.frm{padding:1rem 1.05rem}
+.grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:.7rem}
+@media(min-width:900px){.grid{grid-template-columns:repeat(4,minmax(0,1fr))}}
+.stat b{display:block;font-size:1.6rem;font-weight:800;font-variant-numeric:tabular-nums;color:var(--accent);direction:ltr;text-align:start}
+.stat span{font-size:.8rem;color:var(--muted);display:flex;align-items:center;gap:.35rem}
+.dot{display:inline-block;width:8px;height:8px;border-radius:50%;background:var(--muted);margin-inline-end:6px;vertical-align:middle}
+.dot.on{background:var(--ok);box-shadow:0 0 8px var(--ok)}
+.frm label{display:block;font-size:.84rem;color:var(--muted);margin:.85rem 0 .35rem}
+.frm label:first-child{margin-top:0}
+.frm input,.frm textarea,.frm select,.card select,.card input:not([type=checkbox]),.card textarea{width:100%;font:inherit;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);color:var(--text);padding:.6rem .75rem}
+.frm textarea,.card textarea{min-height:76px;resize:vertical}
+.frm input[type=checkbox],.card input[type=checkbox]{width:auto}
+.frm input::placeholder,.card textarea::placeholder{color:var(--muted)}
+.btns{display:flex;gap:.45rem;margin-top:.6rem;justify-content:flex-end;flex-wrap:wrap;align-items:center}
+.btns button,.card button{font:inherit;font-size:.85rem;padding:.42rem .8rem;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);color:var(--text);cursor:pointer;min-height:34px}
+.btns button:hover,.card button:hover{filter:brightness(1.08)}
+.btns button.ok,.card button.ok{background:var(--accent);border-color:var(--accent);color:var(--accent-ink);font-weight:700}
+.btns button.bad{color:var(--danger)}
+.card button:disabled{opacity:.55}
+.arow{display:flex;justify-content:space-between;align-items:center;gap:.6rem;padding:.6rem 0;border-bottom:1px solid var(--border);font-size:.9rem;flex-wrap:wrap}
+.arow:last-child{border-bottom:0}
+.arow > div{min-width:0}
+.sub{color:var(--muted);font-size:.78rem;margin-top:.15rem;direction:ltr;text-align:start;overflow-wrap:anywhere}
+.num{color:var(--ok);white-space:nowrap;font-variant-numeric:tabular-nums}
+.ev{font-size:.9rem;padding:.6rem 0;border-bottom:1px solid var(--border)}
+.ev:last-child{border-bottom:0}
+.ev time{color:var(--muted);font-size:.76rem;display:block;margin-top:.15rem}
+.badge{display:inline-block;background:color-mix(in srgb,var(--ok) 16%,transparent);color:var(--ok);border-radius:999px;padding:.05rem .55rem;font-size:.74rem;margin-inline-start:.35rem;white-space:nowrap}
+.badge.bad{background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger)}
+.badge.cy{background:var(--accent-soft);color:var(--accent)}
+.chips{display:flex;flex-wrap:wrap;gap:.4rem}
+.chips span{display:inline-block;background:var(--surface-2);border:1px solid var(--border);border-radius:999px;padding:.25rem .7rem;font-size:.82rem}
+.chips b{color:var(--accent)}
+.chart{display:flex;align-items:flex-end;gap:4px;height:140px;padding-top:1.1rem}
+.chart > div{flex:1;min-width:0;text-align:center;font-size:.66rem;color:var(--muted);display:flex;flex-direction:column;justify-content:flex-end;height:100%;overflow:hidden}
+.chart i{display:block;background:linear-gradient(var(--accent),color-mix(in srgb,var(--accent) 35%,transparent));border-radius:4px 4px 0 0;min-height:2px}
+.chart em{font-style:normal;color:var(--text);font-size:.66rem;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+details{border-bottom:1px solid var(--border);padding:.1rem 0}
+details summary{cursor:pointer;font-weight:700;padding:.6rem 0}
+.feat{padding:.55rem 0;border-bottom:1px solid var(--border)}
+.feat:last-child{border-bottom:0}
+.feat b{display:block}
+.feat p{margin:.15rem 0 0;color:var(--muted);font-size:.84rem;line-height:1.7}
+.stat-note{font-size:.76rem;color:var(--muted);margin-top:.5rem;line-height:1.7}
+.hint-line{font-size:.8rem;color:var(--muted);margin-top:.45rem;line-height:1.7}
+.top-r .btn,.top-r button{font-size:.82rem}
+/* ---- support chat (admin) ---- */
+.chat-admin{display:grid;grid-template-columns:minmax(0,300px) minmax(0,1fr);gap:.8rem;align-items:start}
+.ch-list .card-h{margin-bottom:.5rem}
+.ch-list input{margin-bottom:.6rem}
+.ch-threads{display:flex;flex-direction:column;gap:.35rem;max-height:62vh;overflow-y:auto}
+.ch-item{display:flex;flex-direction:column;gap:.15rem;text-align:start;width:100%;padding:.6rem .7rem;border-radius:var(--radius-sm);border:1px solid var(--border);background:var(--surface-2);color:var(--text);cursor:pointer;font:inherit}
+.ch-item:hover{border-color:var(--accent)}
+.ch-item.on{border-color:var(--accent);background:var(--accent-soft)}
+.ch-item .ch-top{display:flex;justify-content:space-between;align-items:center;gap:.4rem}
+.ch-item .ch-top b{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ch-item .ch-pre{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;direction:rtl;text-align:start}
+.ch-item time{font-size:.72rem;color:var(--muted)}
+.ch-view{min-height:320px}
+.ch-head{display:flex;justify-content:space-between;align-items:center;gap:.6rem;padding-bottom:.6rem;border-bottom:1px solid var(--border);margin-bottom:.6rem}
+.ch-head b{font-size:1rem}
+.chat-log{display:flex;flex-direction:column;gap:.5rem;height:min(52vh,460px);overflow-y:auto;padding:.2rem .1rem .6rem}
+.chat-log .bubble{max-width:min(78%,560px)}
+.ch-compose{margin-top:.6rem;padding-top:.7rem;border-top:1px solid var(--border)}
+.ch-compose textarea{min-height:70px}
+#chCount2{direction:ltr}
+/* ---- shell ---- */
+.side .nav-i .count{font-size:.66rem}
+.side .nav-i .count[hidden]{display:none}
+.side .nav{margin-top:.2rem}
+.side .side-foot .btn{font-size:.85rem}
+.top .crumb{font-size:1rem}
+.login-wrap{min-height:100vh;display:grid;place-items:center;padding:1.2rem}
+@media (max-width:820px){
+  .adm-tabs{display:flex;gap:.4rem;overflow-x:auto;padding:.5rem .7rem;background:var(--surface);border-bottom:1px solid var(--border);position:sticky;top:0;z-index:20;scrollbar-width:none}
+  .adm-tabs::-webkit-scrollbar{display:none}
+  .adm-tabs button{flex:none;font:inherit;font-size:.82rem;padding:.4rem .7rem;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);cursor:pointer;white-space:nowrap}
+  .adm-tabs button[aria-current="true"]{background:var(--accent);color:var(--accent-ink);border-color:var(--accent)}
+  .content{padding:.9rem .8rem 2.5rem}
+  .chat-admin{grid-template-columns:1fr}
+  .ch-threads{max-height:220px}
+  .chat-log{height:min(46vh,380px)}
+  .grid{grid-template-columns:repeat(2,minmax(0,1fr))}
+  .top-r{gap:.35rem}
+}
+</style>
+</head>
+<body>
+<div id="login" class="auth-wrap">
+  <div class="card auth-card">
+    <div class="logo" aria-hidden="true">IMRC</div>
+    <h1>پنل مدیریت</h1>
+    <p>برای ورود رمز مدیریت را بنویس یا با تلگرام ادمین وارد شو.</p>
+    <input id="pw" type="password" placeholder="رمز مدیریت" autocomplete="current-password" aria-label="رمز مدیریت"/>
+    <button class="btn primary" onclick="doLogin()">ورود با رمز</button>
+    <button class="btn" onclick="tgLogin()">🤖 ورود با تلگرام (ادمین)</button>
+    <div style="margin-top:.8rem"><button class="btn sm ghost" data-lang-toggle onclick="toggleLang()">English</button></div>
+    <div class="err" id="err" role="alert"></div>
+  </div>
+</div>
+<div id="app" class="app hide">
+  <aside class="side" aria-label="بخش‌های مدیریت">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">IMRC</div>
+      <div><b>پنل مدیریت</b><small>کاربران، پشتیبانی، درآمد</small></div>
+    </div>
+    <nav class="nav" aria-label="بخش‌ها">
+      <button class="nav-i" data-sec="ov" onclick="showSec('ov')"><span class="ni" aria-hidden="true">📊</span>نمای کلی</button>
+      <button class="nav-i" data-sec="chat" onclick="showSec('chat')"><span class="ni" aria-hidden="true">💬</span>پشتیبانی آنلاین <span class="count" id="chBadge" hidden>۰</span></button>
+      <button class="nav-i" data-sec="tickets" onclick="showSec('tickets')"><span class="ni" aria-hidden="true">🎫</span>تیکت‌های تلگرام</button>
+      <button class="nav-i" data-sec="users" onclick="showSec('users')"><span class="ni" aria-hidden="true">👥</span>کاربران</button>
+      <button class="nav-i" data-sec="income" onclick="showSec('income')"><span class="ni" aria-hidden="true">💰</span>درآمد و پرداخت</button>
+      <button class="nav-i" data-sec="growth" onclick="showSec('growth')"><span class="ni" aria-hidden="true">📈</span>رشد و دعوت</button>
+      <button class="nav-i" data-sec="messages" onclick="showSec('messages')"><span class="ni" aria-hidden="true">📣</span>پیام و تخفیف</button>
+      <button class="nav-i" data-sec="settings" onclick="showSec('settings')"><span class="ni" aria-hidden="true">⚙️</span>تنظیمات</button>
+      <button class="nav-i" data-sec="service" onclick="showSec('service')"><span class="ni" aria-hidden="true">🛟</span>سرویس و داده</button>
+      <button class="nav-i" data-sec="log" onclick="showSec('log')"><span class="ni" aria-hidden="true">🧾</span>گزارش و قابلیت‌ها</button>
+    </nav>
+    <div class="side-foot">
+      <a class="btn block" href="#features" onclick="showSec('log')">📚 راهنمای قابلیت‌ها</a>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div class="crumb" id="crumb">نمای کلی</div>
+      <div class="top-r">
+        <span class="user" id="upd" style="font-size:.75rem"></span>
+        <button id="langToggle" class="icon-btn" data-lang-toggle onclick="toggleLang()">English</button>
+        <button class="icon-btn" onclick="setupBot()" title="اتصال وب‌هوک ربات">🤖 اتصال ربات</button>
+        <button class="icon-btn" onclick="logout()">خروج</button>
+      </div>
+    </header>
+    <nav class="adm-tabs" aria-label="بخش‌ها"><button data-sec="ov" onclick="showSec('ov')">📊 نمای کلی</button><button data-sec="chat" onclick="showSec('chat')">💬 پشتیبانی آنلاین</button><button data-sec="tickets" onclick="showSec('tickets')">🎫 تیکت‌های تلگرام</button><button data-sec="users" onclick="showSec('users')">👥 کاربران</button><button data-sec="income" onclick="showSec('income')">💰 درآمد و پرداخت</button><button data-sec="growth" onclick="showSec('growth')">📈 رشد و دعوت</button><button data-sec="messages" onclick="showSec('messages')">📣 پیام و تخفیف</button><button data-sec="settings" onclick="showSec('settings')">⚙️ تنظیمات</button><button data-sec="service" onclick="showSec('service')">🛟 سرویس و داده</button><button data-sec="log" onclick="showSec('log')">🧾 گزارش و قابلیت‌ها</button></nav>
+    <main class="content" id="content">
+<section class="page" id="sec-ov" data-sec="ov">
+  <header class="page-h"><h2>📊 نمای کلی</h2><p>آمار زنده، رشد روزانه و فعالیت‌های اخیر</p></header>
+  <div class="grid">
+    <div class="card stat"><b id="sOnline">0</b><span><i class="dot on"></i>آنلاین الان</span></div>
+    <div class="card stat"><b id="sConfToday">0</b><span>کانفیگ امروز</span></div>
+    <div class="card stat"><b id="sConf">0</b><span>کل کانفیگ‌ها</span></div>
+    <div class="card stat"><b id="sVis">0</b><span>کل کاربران</span></div>
+    <div class="card stat"><b id="sVisToday">0</b><span>کاربر فعال امروز</span></div>
+    <div class="card stat"><b id="sVisits">0</b><span>کل بازدیدها</span></div>
+    <div class="card stat"><b id="sAct">0</b><span>کل فعالیت‌ها</span></div>
+    <div class="card stat"><b id="sAvg">0</b><span>کانفیگ به‌ازای کاربر</span></div>
+  </div>
+
+  
+<div class="blk"><h3 class="blk-h">کانفیگ ساخته‌شده در ۱۴ روز اخیر</h3>
+  <div class="card"><div class="bars" id="bars"></div></div>
+
+  </div>
+<div class="blk"><h3 class="blk-h">پرکاربردترین کشورها و حالت‌ها</h3>
+  <div class="card chips" id="chips"></div>
+
+  </div>
+<div class="blk"><h3 class="blk-h">فعالیت‌های اخیر</h3>
+  <div class="card" id="events"></div>
+  <p style="color:var(--mut);font-size:11px;text-align:center">هر ۱۵ ثانیه خودکار به‌روز می‌شود • <span id="upd"></span></p>
+</div>
+</section>
+<section class="page" id="sec-chat" data-sec="chat">
+  <header class="page-h"><h2>💬 پشتیبانی آنلاین</h2><p>پیام‌های کاربران داخل پنل را اینجا می‌بینی و پاسخ می‌دهی</p></header>
+
+    <div class="chat-admin">
+      <div class="card ch-list">
+        <div class="card-h"><b>گفتگوها</b><span class="sub" id="chCount2"></span></div>
+        <input id="chQ" type="search" placeholder="جستجو با آیدی تلگرام" oninput="chSearch()" autocomplete="off"/>
+        <div id="chThreads" class="ch-threads"></div>
+      </div>
+      <div class="card ch-view">
+        <div id="chEmpty" class="empty"><b>یک گفتگو را انتخاب کن</b>پیام‌های کاربران پنل اینجا نمایش داده می‌شوند. هر پاسخی که بفرستی در تلگرام کاربر هم ارسال می‌شود.</div>
+        <div id="chPane" class="ch-pane hide">
+          <div class="ch-head">
+            <div><b id="chTitle"></b><div class="sub" id="chSub"></div></div>
+          </div>
+          <div id="chLog" class="chat-log"></div>
+          <div class="frm ch-compose">
+            <textarea id="chReply" maxlength="3500" placeholder="پاسخ به کاربر… (Ctrl+Enter ارسال)"></textarea>
+            <div class="btns">
+              <span class="sub" id="chReplyCount"></span>
+              <button class="ok" onclick="sendChatReply()">ارسال پاسخ</button>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+</section>
+<section class="page" id="sec-tickets" data-sec="tickets">
+  <header class="page-h"><h2>🎫 تیکت‌های تلگرام</h2><p>تیکت‌هایی که از ربات تلگرام ساخته شده‌اند</p></header>
+<div class="blk"><h3 class="blk-h">🎫 تیکت‌های پشتیبانی</h3>
+  <div class="card">
+    <div class="btns" style="margin:0 0 8px;justify-content:flex-start">
+      <button id="tabOpen" onclick="setTab('open')">باز</button>
+      <button id="tabClosed" onclick="setTab('closed')" style="background:#232a40">بسته‌شده</button>
+    </div>
+    <div id="tickets"></div>
+  </div>
+  <div id="thread" class="card frm hide" style="margin-top:10px">
+    <div style="font-weight:700" id="tTitle"></div>
+    <div id="tmsgs" style="max-height:340px;overflow:auto;margin-top:8px"></div>
+    <label>پاسخ به کاربر</label>
+    <textarea id="tReply"></textarea>
+    <div class="btns">
+      <button onclick="closeTicket()" style="background:#232a40">بستن تیکت</button>
+      <button class="ok" onclick="replyTicket()">ارسال پاسخ</button>
+    </div>
+  </div>
+
+  </div>
+</section>
+<section class="page" id="sec-users" data-sec="users">
+  <header class="page-h"><h2>👥 کاربران</h2><p>جستجو، فیلتر، سقف اختصاصی و عملیات گروهی</p></header>
+<div class="blk"><h3 class="blk-h">کاربران</h3>
+  <div class="card frm" style="margin-bottom:10px">
+    <input id="uq" placeholder="جستجو: نام، @یوزرنیم، آیدی، شهر" oninput="searchUsers()" style="width:100%"/>
+    <select id="uf" onchange="uPage=0;loadUsers()" style="width:100%;font:inherit;border-radius:10px;border:1px solid var(--line);background:#0e1220;color:var(--tx);padding:10px 12px;margin-top:8px">
+      <option value="all">همه‌ی کاربران</option>
+      <option value="sub">اشتراک فعال</option>
+      <option value="expired">اشتراک منقضی‌شده</option>
+      <option value="never">هیچ‌وقت اشتراک نگرفته</option>
+      <option value="banned">مسدود</option>
+      <option value="new7">جدید (۷ روز اخیر)</option>
+      <option value="inactive30">غیرفعال (بیش از ۳۰ روز)</option>
+    </select>
+    <div class="btns" style="justify-content:space-between;align-items:center">
+      <span id="uinfo" style="font-size:12px;color:var(--mut)"></span>
+      <span>
+        <button onclick="pageU(-1)" style="background:#232a40">قبلی</button>
+        <button onclick="pageU(1)" style="background:#232a40">بعدی</button>
+        <button onclick="dlUsers()" style="background:#232a40">📥 خروجی اکسل</button>
+      </span>
+    </div>
+  </div>
+  <div class="card" id="users"></div>
+
+  </div>
+<div class="blk"><h3 class="blk-h">👥 عملیات گروهی (روی نتیجه‌ی فیلتر و جستجوی بالا)</h3>
+  <div class="card frm">
+    <select id="bulkAct" style="width:100%;font:inherit;border-radius:10px;border:1px solid var(--line);background:#0e1220;color:var(--tx);padding:10px 12px">
+      <option value="grant">⭐ افزودن اشتراک</option>
+      <option value="ban">🚫 مسدود کردن</option>
+      <option value="unban">✅ رفع مسدودی</option>
+    </select>
+    <input id="bulkDays" type="number" min="1" max="3650" inputmode="numeric" placeholder="تعداد روز (فقط برای افزودن اشتراک)" style="margin-top:8px"/>
+    <input id="bulkReason" maxlength="100" placeholder="دلیل مسدودسازی (اختیاری)" style="margin-top:8px"/>
+    <div class="btns" style="justify-content:space-between;align-items:center">
+      <span id="bulkInfo" style="font-size:12px;color:var(--mut)"></span>
+      <span><button onclick="bulkPreview()" style="background:#232a40">پیش‌نمایش</button><button onclick="bulkRun()">اجرا</button></span>
+    </div>
+    <div style="font-size:11px;color:var(--mut);margin-top:6px">حداکثر ۵۰۰ کاربر در هر عملیات. اول پیش‌نمایش بگیر؛ همان فیلتر پیش‌نمایش اجرا می‌شود و اگر تعداد کاربرها عوض شده باشد، عملیات لغو می‌شود.</div>
+  </div>
+
+  </div>
+</section>
+<section class="page" id="sec-income" data-sec="income">
+  <header class="page-h"><h2>💰 درآمد و پرداخت</h2><p>درآمد، گزارش ماهانه و ثبت پرداخت دستی</p></header>
+<div class="blk"><h3 class="blk-h">📈 درآمد</h3>
+  <div class="grid" style="grid-template-columns:repeat(2,1fr)">
+    <div class="card stat"><b id="rToday">۰</b><span>درآمد امروز (تومان)</span></div>
+    <div class="card stat"><b id="rMonth">۰</b><span>درآمد این ماه (تومان)</span></div>
+    <div class="card stat"><b id="rAll">۰</b><span>کل درآمد (تومان)</span></div>
+    <div class="card stat"><b id="rPay">۰</b><span>کل پرداخت‌های تأییدشده</span></div>
+  </div>
+  </div>
+<div class="blk"><h3 class="blk-h">درآمد ۳۰ روز اخیر (هزار تومان)</h3>
+  <div class="card"><div class="bars" id="rBars" style="gap:2px"></div></div>
+  </div>
+<div class="blk"><h3 class="blk-h">گزارش ماهانه (شمسی)</h3>
+  <div class="card" id="rMonthly"></div>
+  <div class="btns" style="justify-content:flex-start">
+    <button onclick="dl('monthly')" style="background:#232a40">📥 گزارش ماهانه (اکسل)</button>
+    <button onclick="dl('receipts')" style="background:#232a40">📥 همه‌ی رسیدها (اکسل)</button>
+  </div>
+
+  </div>
+<div class="blk"><h3 class="blk-h">💵 ثبت پرداخت نقدی یا دستی</h3>
+  <div class="card frm">
+    <input id="pmTg" inputmode="numeric" placeholder="آیدی عددی تلگرام کاربر"/>
+    <input id="pmPlan" placeholder="کلید پلن (مثلاً m)" style="margin-top:8px"/>
+    <input id="pmAmount" type="number" min="0" inputmode="numeric" placeholder="مبلغ به تومان (خالی = قیمت پلن)" style="margin-top:8px"/>
+    <input id="pmNote" maxlength="80" placeholder="یادداشت (مثلاً: کارت به کارت دستی)" style="margin-top:8px"/>
+    <div class="btns"><button onclick="manualPay()">ثبت و فعال‌سازی</button></div>
+    <div style="font-size:11px;color:var(--mut);margin-top:6px">این پرداخت در گزارش درآمد حساب می‌شود و در گزارش فعالیت ثبت می‌شود.</div>
+  </div>
+
+  </div>
+</section>
+<section class="page" id="sec-growth" data-sec="growth">
+  <header class="page-h"><h2>📈 رشد و دعوت</h2><p>شاخص‌های رشد، دعوت‌ها و کیف پول</p></header>
+<div class="blk"><h3 class="blk-h">📊 شاخص‌های رشد</h3>
+  <div class="grid" id="insights" style="grid-template-columns:repeat(2,1fr)"></div>
+
+  </div>
+<div class="blk"><h3 class="blk-h">🏆 برترین دعوت‌کننده‌ها</h3>
+  <div class="card" id="refs"></div>
+
+  </div>
+<div class="blk"><h3 class="blk-h">🎁 کیف پول اعتبار دعوت</h3>
+  <div class="card frm">
+    <div id="walletInfo" style="font-size:12px;color:var(--mut);margin-bottom:8px"></div>
+    <div id="walletList"></div>
+    <input id="wTg" inputmode="numeric" placeholder="آیدی عددی تلگرام کاربر" style="margin-top:10px"/>
+    <input id="wDelta" type="number" placeholder="مبلغ به تومان؛ مثبت = افزایش، منفی = کاهش" style="margin-top:8px"/>
+    <input id="wReason" maxlength="80" placeholder="دلیل (مثلاً: جبران خطا)" style="margin-top:8px"/>
+    <div class="btns"><button onclick="walletAdjust()">ثبت تغییر</button></div>
+  </div>
+
+  </div>
+</section>
+<section class="page" id="sec-messages" data-sec="messages">
+  <header class="page-h"><h2>📣 پیام و تخفیف</h2><p>پیام همگانی به کاربران ربات و کدهای تخفیف</p></header>
+<div class="blk"><h3 class="blk-h">📣 پیام همگانی به کاربران ربات</h3>
+  <div class="card frm">
+    <textarea id="bcText" placeholder="متن پیام (حداکثر ۳۵۰۰ کاراکتر، متن ساده)"></textarea>
+    <label>گیرنده‌ها</label>
+    <select id="bcTarget" style="width:100%;font:inherit;border-radius:10px;border:1px solid var(--line);background:#0e1220;color:var(--tx);padding:10px 12px">
+      <option value="all">همه‌ی کاربران ربات</option>
+      <option value="sub">فقط کاربران دارای اشتراک</option>
+      <option value="free">فقط کاربران بدون اشتراک</option>
+    </select>
+    <button onclick="sendBroadcast()" style="margin-top:12px;width:100%">ارسال پیام همگانی</button>
+    <div style="font-size:11px;color:var(--mut);margin-top:8px">ارسال تدریجی و در چند دقیقه انجام می‌شه. وقتی تموم شد، خبرش به تلگرام ادمین میاد.</div>
+    <div id="bcs" style="margin-top:12px"></div>
+  </div>
+
+  </div>
+</section>
+<section class="page" id="sec-settings" data-sec="settings">
+  <header class="page-h"><h2>⚙️ تنظیمات</h2><p>سقف، پلن‌ها، پیام‌ها و وضعیت سرویس</p></header>
+<div class="blk"><h3 class="blk-h">⚙️ محدودیت و اشتراک</h3>
+  <div class="card frm">
+    <label>سقف کانفیگ روزانه برای کاربر رایگان</label>
+    <input id="setFree" type="number" min="0" max="1000" inputmode="numeric"/>
+    <label>سقف کانفیگ روزانه برای کاربر دارای اشتراک</label>
+    <input id="setSub" type="number" min="0" max="1000" inputmode="numeric"/>
+    <label>کشورهای رایگان (کد دو حرفی با ویرگول، مثل tr,de,ae)</label>
+    <input id="setFree2" dir="ltr" placeholder="tr,de,ae"/>
+    <label>پیام خرید اشتراک (وقتی سقف تموم شد نشون داده می‌شه — آیدی تلگرام یا راه پرداخت رو اینجا بنویس)</label>
+    <textarea id="setText"></textarea>
+    <label>پلن‌های اشتراک (هر خط: کلید|نام|روز|قیمت به تومان — مثلاً m|ماهانه|30|150000)</label>
+    <textarea id="setPlans" dir="ltr" style="text-align:left"></textarea>
+    <label>متن پرداخت (شماره کارت و...) — در پیام خرید ربات نمایش داده می‌شه</label>
+    <textarea id="setPay"></textarea>
+    <label>تعداد روز اشتراک رایگان به ازای هر دعوت (۰ = غیرفعال)</label>
+    <input id="setRef" type="number" min="0" max="365" inputmode="numeric"/>
+    <label>اعتبار کیف پول به ازای هر دعوت موفق (تومان، ۰ = غیرفعال). دعوت‌کننده موقع خرید می‌تونه ازش استفاده کنه.</label>
+    <input id="setRefCredit" type="number" min="0" max="10000000" inputmode="numeric"/>
+    <label>یادآوری انقضا: چند روز قبل از پایان اشتراک به کاربر پیام داده بشه (۰ = غیرفعال)</label>
+    <input id="setRemind" type="number" min="0" max="30" inputmode="numeric"/>
+    <label style="display:flex;align-items:center;gap:8px;color:var(--tx)"><input id="setNotify" type="checkbox" style="width:auto"/> اعلان به تلگرام ادمین: کاربر جدید و رسیدن کاربر به سقف</label>
+    <label>وضعیت سرویس (صفحه‌ی عمومی /status)</label>
+    <select id="setStatus" style="width:100%;font:inherit;border-radius:10px;border:1px solid var(--line);background:#0e1220;color:var(--tx);padding:10px 12px">
+      <option value="ok">فعال (همه‌چیز عادیه)</option>
+      <option value="degraded">کند / ناپایدار</option>
+      <option value="down">قطع</option>
+    </select>
+    <label>پیام وضعیت برای کاربران (اختیاری، حداکثر ۲۰۰ کاراکتر — وقتی خالی باشه و وضعیت فعال باشه، نمایش داده نمی‌شه)</label>
+    <textarea id="setStatusNote" maxlength="200" placeholder="مثلاً: به‌خاطر به‌روزرسانی، ساخت کانفیگ تا ۲۰ دقیقه کند است."></textarea>
+    <label>پیام خوش‌آمد ربات (خالی = متن پیش‌فرض)</label>
+    <textarea id="setMsgWelcome" maxlength="1000"></textarea>
+    <label>متن یادآور انقضا — {days} = تعداد روز، {date} = تاریخ</label>
+    <textarea id="setMsgReminder" maxlength="1000"></textarea>
+    <label>متن تأیید پرداخت — {plan} = نام پلن، {days} = روز، {date} = تاریخ انقضا</label>
+    <textarea id="setMsgApproved" maxlength="1000"></textarea>
+    <button onclick="saveSettings()" style="margin-top:12px;width:100%">ذخیره تنظیمات</button>
+    <div style="font-size:11px;color:var(--mut);margin-top:8px">این‌ها مقدار پیش‌فرض همه‌ی کاربرانه. سهمیه ساعت ۰۰:۰۰ به وقت ایران ریست می‌شه (هفته از شنبه، ماه شمسی). برای یک کاربر خاص، از لیست پایین دکمه‌ی «⚙️ سقف» رو بزن.</div>
+  </div>
+
+  </div>
+<div class="blk"><h3 class="blk-h">🎟 کدهای تخفیف</h3>
+  <div class="card frm">
+    <div style="font-size:11px;color:var(--mut)">کاربر کد رو توی ربات با /code وارد می‌کنه. تأیید رسید و پلن‌ها هم از طریق ربات انجام می‌شه.</div>
+    <label>کد (انگلیسی و عدد)</label><input id="cCode" dir="ltr" placeholder="SPRING20"/>
+    <label>درصد تخفیف</label><input id="cPct" type="number" min="1" max="100" value="20" inputmode="numeric"/>
+    <label>حداکثر دفعات استفاده (۰ = نامحدود)</label><input id="cMax" type="number" min="0" value="0" inputmode="numeric"/>
+    <label>مدت اعتبار به روز (۰ = بدون انقضا)</label><input id="cDays" type="number" min="0" value="0" inputmode="numeric"/>
+    <button onclick="addCode()" style="margin-top:12px;width:100%">ساخت کد</button>
+    <div id="codes" style="margin-top:12px"></div>
+  </div>
+
+  </div>
+</section>
+<section class="page" id="sec-service" data-sec="service">
+  <header class="page-h"><h2>🛟 سرویس و داده</h2><p>آپ‌تایم، حوادث، آرشیو کانفیگ و پشتیبان</p></header>
+<div class="blk"><h3 class="blk-h">⏱ آپ‌تایم و حوادث</h3>
+  <div class="card frm">
+    <div id="upInfo" style="font-size:13px;color:var(--mut);margin-bottom:8px"></div>
+    <input id="incTitle" maxlength="120" placeholder="عنوان حادثه (مثلاً: اختلال در دریافت کانفیگ)"/>
+    <select id="incLevel" style="width:100%;font:inherit;border-radius:10px;border:1px solid var(--line);background:#0e1220;color:var(--tx);padding:10px 12px;margin-top:8px">
+      <option value="degraded">کند / ناپایدار</option>
+      <option value="down">قطع</option>
+    </select>
+    <textarea id="incBody" maxlength="600" placeholder="توضیح برای کاربران (اختیاری؛ تگ HTML نمایش داده نمی‌شه)" style="margin-top:8px"></textarea>
+    <div class="btns"><button onclick="createIncident()">ثبت حادثه</button></div>
+    <div style="font-size:11px;color:var(--mut);margin-top:6px">حادثه روی صفحه‌ی وضعیت سرویس نمایش داده می‌شه. بعد از رفع مشکل «بستن» رو بزن.</div>
+  </div>
+  <div class="card" id="incList"></div>
+
+  </div>
+<div class="blk"><h3 class="blk-h">🗂 آرشیو فایل کانفیگ (۳۰ روزه)</h3>
+  <div class="card frm">
+    <div style="font-size:12px;color:var(--mut);margin-bottom:8px;line-height:1.9">هر کانفیگ ساخته‌شده (از پنل یا ربات) فایل کاملش ۳۰ روز نگه داشته می‌شود و بعد خودکار حذف می‌شود. این فایل شامل کلید خصوصی است و بدون رمزنگاری ذخیره می‌شود؛ فقط از همین بخش قابل دیدن است.</div>
+    <div class="grid" style="margin-bottom:8px">
+      <div class="card stat"><b id="cfCount">—</b><span>فایل فعال</span></div>
+      <div class="card stat"><b id="cfSize">—</b><span>حجم (کیلوبایت)</span></div>
+    </div>
+    <input id="cfQ" placeholder="جستجو با آیدی تلگرام یا نام کانفیگ" oninput="cfPage=0;loadConfigFiles()" style="width:100%"/>
+    <div id="cfList" style="margin-top:10px"></div>
+    <div class="btns" style="margin-top:8px"><button onclick="cfMove(-1)">قبلی</button><span id="cfPg" style="font-size:12px;color:var(--mut);align-self:center"></span><button onclick="cfMove(1)">بعدی</button></div>
+  </div>
+
+  </div>
+<div class="blk"><h3 class="blk-h">💾 پشتیبان و نگهداری داده</h3>
+  <div class="card frm">
+    <div id="retInfo" style="font-size:12px;color:var(--mut);margin-bottom:8px"></div>
+    <div class="btns"><button onclick="downloadBackup()" style="background:#232a40">📥 دانلود پشتیبان (JSON)</button><button onclick="runRetention()" style="background:#232a40">🧹 اجرای نگهداری الان</button></div>
+    <div style="font-size:11px;color:var(--mut);margin-top:6px">پشتیبان شامل کاربران، اشتراک‌ها، رسیدها و تیکت‌هاست؛ کلید کانفیگ، سشن یا توکن ورود در آن نیست. فایل را امن نگه دار.</div>
+  </div>
+
+  </div>
+</section>
+<section class="page" id="sec-log" data-sec="log">
+  <header class="page-h"><h2>🧾 گزارش و قابلیت‌ها</h2><p>فعالیت ادمین و فهرست کامل قابلیت‌ها</p></header>
+<div class="blk" id="features"><h3 class="blk-h">📚 همه‌ی قابلیت‌های سایت، ربات و پنل</h3>
+  <div class="card frm">
+    <div style="font-size:12px;color:var(--mut);margin-bottom:8px">هر قابلیت با توضیح کوتاهش آمده. تعداد کل: <b id="featCount">0</b></div>
+    <input id="featSearch" placeholder="جستجو در قابلیت‌ها…" oninput="renderFeatures()" style="width:100%"/>
+    <div id="featGroups" style="margin-top:10px"></div>
+  </div>
+
+  </div>
+<div class="blk"><h3 class="blk-h">🧾 گزارش فعالیت ادمین</h3>
+  <div class="card" id="audit"></div>
+
+  </div>
+</section>
+    </main>
+  </div>
+</div>
+<script>
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fa=n=>Number(n||0).toLocaleString("fa-IR");
+let pw=sessionStorage.getItem("imrc_admin")||"",timer;
+
+const PER={day:"روز",week:"هفته",month:"ماه"};
+const TAB={main:"اصلی",codm:"کالاف",stats:"آمار",settings:"تنظیمات",tools:"ابزارها"};
+function evText(e){
+  if(e.type==="visit")return "🟢 وارد پنل شد";
+  if(e.type==="config")return `📥 کانفیگ ساخت: <b>${esc(e.name)}</b> • ${esc(e.region)} • ${esc(e.mode)}/${esc(e.role)}`;
+  const d=esc(e.detail),n=e.name;
+  if(n==="switchTab")return `📂 رفت به تب «${esc(TAB[e.detail]||e.detail)}»`;
+  if(n==="applyPreset")return `⚡ پریست «${d}» را زد`;
+  if(n==="setMode")return `🎮 حالت بازی: ${d}`;
+  if(n==="setRole")return `🎭 نقش: ${d}`;
+  if(n==="codmOptimize")return "🎯 بهینه‌سازی یک‌کلیکی کالاف";
+  return `✨ ${esc(n)} ${d}`;
+}
+const ago=(ms,now)=>{const s=Math.max(0,Math.round((now-ms)/1000));if(s<60)return fa(s)+" ثانیه پیش";if(s<3600)return fa(Math.round(s/60))+" دقیقه پیش";if(s<86400)return fa(Math.round(s/3600))+" ساعت پیش";return fa(Math.round(s/86400))+" روز پیش"};
+const clock=ms=>new Date(ms).toLocaleString("fa-IR",{hour:"2-digit",minute:"2-digit",day:"numeric",month:"short"});
+
+function authH(){return pw?{Authorization:"Bearer "+pw}:{}}
+let chUnreadHint = 0;
+async function load(){
+  let r;
+  try{r=await fetch("/api/admin/stats",{headers:authH()})}catch(e){$("err").textContent="خطا در اتصال";return false}
+  if(r.status===401){if(pw)$("err").textContent="رمز اشتباه است";return false}
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok){$("err").textContent=d.error||"خطای سرور";return false}
+  render(d);loadUsers();
+  if(!window._rl||Date.now()-window._rl>60000){window._rl=Date.now();loadReport()}
+  return true;
+}
+function render(d){
+  const t=d.totals,now=d.now;
+  $("sOnline").textContent=fa(d.online);$("sConfToday").textContent=fa(d.today.c);
+  $("sConf").textContent=fa(t.c);$("sVis").textContent=fa(t.v);$("sVisToday").textContent=fa(d.today.v);
+  $("sVisits").textContent=fa(t.vis);$("sAct").textContent=fa(t.a);
+  $("sAvg").textContent=t.v?(t.c/t.v).toLocaleString("fa-IR",{maximumFractionDigits:1}):"۰";
+
+  const today=Math.floor((d.dayStart+d.tehran)/86400000),map={};
+  d.daily.forEach(x=>map[x.d]=x.c);
+  const days=[];for(let i=13;i>=0;i--)days.push(today-i);
+  const max=Math.max(1,...days.map(x=>map[x]||0));
+  $("bars").innerHTML=days.map(x=>{const c=map[x]||0,lab=new Date(x*86400000).toLocaleDateString("fa-IR",{day:"numeric",timeZone:"UTC"});
+    return `<div><em>${c?fa(c):""}</em><i style="height:${Math.round(c/max*80)}px"></i>${lab}</div>`}).join("");
+
+  const chip=(a,l)=>a.map(x=>`<span>${l} ${esc(x.k)} <b>${fa(x.c)}</b></span>`).join("");
+  $("chips").innerHTML=(chip(d.regions,"🌍")+chip(d.modes,"🎮"))||'<span style="color:var(--muted)">هنوز داده‌ای نیست</span>';
+
+  // کاربران: با loadUsers() گرفته می‌شن (جستجو و فیلتر و صفحه‌بندی)
+
+  $("events").innerHTML=d.events.map(e=>`<div class="ev"><b>${esc(e.tg_name||(e.tg_username?"@"+e.tg_username:"#"+e.vid.slice(0,6)))}</b> — ${evText(e)}<time>${clock(e.ts)}</time></div>`).join("")||'<span style="color:var(--muted)">هنوز فعالیتی نیست</span>';
+  if(d.settings&&!window._setLoaded){window._setLoaded=true;$("setFree").value=d.settings.free_limit;$("setSub").value=d.settings.sub_limit;$("setText").value=d.settings.buy_text;$("setFree2").value=d.settings.free_countries;$("setPlans").value=d.settings.plans_text;$("setPay").value=d.settings.pay_text;$("setRef").value=d.settings.ref_days;$("setRefCredit").value=d.settings.ref_credit;$("setRemind").value=d.settings.remind_days;$("setNotify").checked=!!d.settings.admin_notify;$("setStatus").value=d.settings.status_level||"ok";$("setStatusNote").value=d.settings.status_note||"";$("setMsgWelcome").value=d.settings.msg_welcome||"";$("setMsgReminder").value=d.settings.msg_reminder||"";$("setMsgApproved").value=d.settings.msg_approved||""}
+  $("upd").textContent="آخرین به‌روزرسانی: "+new Date().toLocaleTimeString("fa-IR");
+}
+async function start(){
+  $("login").classList.add("hide");$("app").classList.remove("hide");showSec(location.hash.slice(1));loadChatThreads();loadCodes();loadTickets();loadBroadcasts();loadInsights();loadRefs();loadAudit();loadRetention();loadWallets();loadIncidents();loadConfigFiles();window._rl=Date.now();loadReport();
+  clearInterval(timer);timer=setInterval(()=>{if(!document.hidden){load();loadChatThreads();if(chTg)openChat(chTg,true);loadTickets();loadBroadcasts();loadConfigFiles();if(window._tid)openTicket(window._tid,true)}},15000);
+}
+async function doLogin(){
+  pw=$("pw").value;$("err").textContent="";
+  if(await load()){sessionStorage.setItem("imrc_admin",pw);start()}
+}
+async function post(path,body){
+  const r=await fetch(path,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},authH()),body:JSON.stringify(body)});
+  const d=await r.json().catch(()=>({}));
+  if(!r.ok)throw new Error(d.error||"خطا");
+  return d;
+}
+async function grant(id){
+  const days=prompt("چند روز اشتراک فعال بشه؟ (مثلاً 30)","30");
+  if(!days)return;
+  try{await post("/api/admin/sub",{tg_id:id,days:parseInt(days)});alert("✅ اشتراک فعال شد و به کاربر پیام تلگرام رفت.");load()}catch(e){alert("❌ "+e.message)}
+}
+function openLimit(i){
+  const v=(window._users||[])[i];if(!v||!v.tg_id)return;
+  const has=v.ul_lim!=null&&(!v.ul_until||v.ul_until>Date.now());
+  const old=document.getElementById("lim");if(old)old.remove();
+  const o=document.createElement("div");o.id="lim";
+  o.style.cssText="position:fixed;inset:0;background:rgba(0,0,0,.75);z-index:50;display:flex;align-items:center;justify-content:center;padding:16px";
+  const b=document.createElement("div");b.className="card frm";b.style.cssText+="width:100%;max-width:380px;background:var(--surface)";
+  const h=document.createElement("div");h.style.cssText="font-weight:700;margin-bottom:6px";h.textContent="⚙️ سقف اختصاصی: "+(v.tg_name||(v.tg_username?"@"+v.tg_username:v.tg_id));
+  const mk=(lbl,el)=>{const l=document.createElement("label");l.textContent=lbl;b.append(l,el);return el};
+  b.append(h);
+  const n=document.createElement("input");n.type="number";n.min="0";n.max="1000";n.value=has?v.ul_lim:1;mk("تعداد کانفیگ مجاز",n);
+  const p=document.createElement("select");p.style.cssText="width:100%;font:inherit;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);padding:10px 12px";
+  [["day","در هر روز"],["week","در هر هفته (از شنبه)"],["month","در هر ماه شمسی"]].forEach(([k,t])=>{const op=document.createElement("option");op.value=k;op.textContent=t;p.appendChild(op)});
+  p.value=has&&v.ul_period?v.ul_period:"month";mk("بازه",p);
+  const d=document.createElement("input");d.type="number";d.min="0";d.max="3650";d.placeholder="خالی = بدون انقضا";
+  if(has&&v.ul_until)d.value=Math.max(1,Math.ceil((v.ul_until-Date.now())/86400000));
+  mk("مدت اعتبار این سقف (روز)",d);
+  const row=document.createElement("label");row.style.cssText="display:flex;align-items:center;gap:8px;margin-top:12px;font-size:13px;color:var(--text)";
+  const u=document.createElement("input");u.type="checkbox";u.style.cssText="width:auto";u.checked=!!(has&&v.ul_unlock);
+  row.append(u,document.createTextNode("همه‌ی امکانات پولی (کشورها، DNS، MTU) باز باشه"));b.append(row);
+  const bt=document.createElement("div");bt.className="btns";bt.style.marginTop="14px";
+  const save=document.createElement("button");save.className="ok";save.textContent="ذخیره";
+  save.onclick=async()=>{try{await post("/api/admin/userlimit",{tg_id:v.tg_id,limit:n.value,period:p.value,days:d.value||0,unlock:u.checked});o.remove();load()}catch(e){alert("❌ "+e.message)}};
+  const rs=document.createElement("button");rs.textContent="برگشت به پیش‌فرض";
+  rs.onclick=async()=>{try{await post("/api/admin/userlimit",{tg_id:v.tg_id,reset:true});o.remove();load()}catch(e){alert("❌ "+e.message)}};
+  const cl=document.createElement("button");cl.textContent="بستن";cl.onclick=()=>o.remove();
+  bt.append(cl);if(has)bt.append(rs);bt.append(save);b.append(bt);
+  o.appendChild(b);o.onclick=e=>{if(e.target===o)o.remove()};document.body.appendChild(o);
+}
+async function ban(id,on){
+  let reason="";
+  if(on){reason=prompt("دلیل مسدودی (اختیاری):","")||"";if(!confirm("این کاربر مسدود بشه؟"))return}
+  try{await post("/api/admin/ban",{tg_id:id,ban:on,reason});load()}catch(e){alert("❌ "+e.message)}
+}
+async function revoke(id){
+  if(!confirm("اشتراک این کاربر لغو بشه؟"))return;
+  try{await post("/api/admin/sub",{tg_id:id,days:0});load()}catch(e){alert("❌ "+e.message)}
+}
+async function saveSettings(){
+  try{await post("/api/admin/settings",{free_limit:$("setFree").value,sub_limit:$("setSub").value,buy_text:$("setText").value,free_countries:$("setFree2").value,plans:$("setPlans").value,pay_text:$("setPay").value,ref_days:$("setRef").value,ref_credit:$("setRefCredit").value,remind_days:$("setRemind").value,admin_notify:$("setNotify").checked,status_level:$("setStatus").value,status_note:$("setStatusNote").value,msg_welcome:$("setMsgWelcome").value,msg_reminder:$("setMsgReminder").value,msg_approved:$("setMsgApproved").value});alert("✅ ذخیره شد.");window._setLoaded=false;load()}catch(e){alert("❌ "+e.message)}
+}
+let tgTimer;
+async function tgLogin(){
+  $("err").textContent="";
+  let d;
+  try{const r=await fetch("/api/admin/tg/start",{method:"POST"});d=await r.json();if(!r.ok)throw new Error(d.error||"خطا")}
+  catch(e){$("err").textContent="❌ "+e.message;return}
+  window.open(d.url,"_blank");
+  $("err").textContent="توی تلگرام روی «Start» بزن تا ورود تأیید بشه…";
+  const until=Date.now()+180000;
+  clearInterval(tgTimer);
+  tgTimer=setInterval(async()=>{
+    if(Date.now()>until){clearInterval(tgTimer);$("err").textContent="زمان تموم شد. دوباره امتحان کن.";return}
+    const r=await fetch("/api/admin/tg/check?token="+d.token).catch(()=>null);
+    if(!r)return;
+    const s=await r.json().catch(()=>({}));
+    if(s.status==="ok"){clearInterval(tgTimer);if(await load())start()}
+    else if(s.status==="expired"){clearInterval(tgTimer);$("err").textContent="لینک منقضی شد. دوباره امتحان کن."}
+  },2000);
+}
+async function loadCodes(){
+  const r=await fetch("/api/admin/codes",{headers:authH()}).catch(()=>null);
+  if(!r||!r.ok)return;
+  const d=await r.json();
+  $("codes").innerHTML=d.codes.map(c=>{
+    const exp=c.expires?new Date(c.expires).toLocaleDateString("fa-IR"):"بدون انقضا";
+    const used=fa(c.used)+" / "+(c.max_uses?fa(c.max_uses):"∞");
+    const off=c.active?"":' <span class="badge" style="background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger)">غیرفعال</span>';
+    const btn=c.active?`<button onclick="toggleCode('${esc(c.code)}',true)">غیرفعال کن</button>`:`<button onclick="toggleCode('${esc(c.code)}',false)">فعال کن</button>`;
+    return `<div class="arow"><div><b dir="ltr">${esc(c.code)}</b> <span class="badge">${fa(c.percent)}٪</span>${off}<div class="sub">استفاده: ${used} • ${exp}</div></div><div class="btns" style="margin:0">${btn}</div></div>`;
+  }).join("")||'<span style="color:var(--muted)">کدی ساخته نشده</span>';
+}
+async function addCode(){
+  try{await post("/api/admin/codes",{code:$("cCode").value,percent:$("cPct").value,max_uses:$("cMax").value,days:$("cDays").value});$("cCode").value="";loadCodes()}catch(e){alert("❌ "+e.message)}
+}
+async function toggleCode(code,off){
+  try{await post("/api/admin/codes",{code,disable:off});loadCodes()}catch(e){alert("❌ "+e.message)}
+}
+let tab="open";
+function setTab(t){tab=t;$("tabOpen").classList.toggle("ok",t==="open");$("tabClosed").classList.toggle("ok",t==="closed");loadTickets()}
+async function loadTickets(){
+  const r=await fetch("/api/admin/tickets?status="+tab,{headers:authH()}).catch(()=>null);
+  if(!r||!r.ok)return;
+  const d=await r.json();
+  $("tickets").innerHTML=d.tickets.map(t=>{
+    const who=t.name||(t.username?"@"+t.username:t.tg_id);
+    const pre=t.last_sender==="admin"?"پشتیبانی: ":"";
+    return `<div class="arow" style="cursor:pointer" onclick="openTicket(${t.id})"><div><b>#${t.id} ${esc(who)}</b><div class="sub" style="direction:rtl;text-align:right">${esc(pre+(t.last||"").slice(0,80))}</div></div><div class="sub">${ago(t.updated,Date.now())}</div></div>`;
+  }).join("")||'<span style="color:var(--muted)">تیکتی نیست</span>';
+}
+async function openTicket(id,silent){
+  const r=await fetch("/api/admin/ticket?id="+id,{headers:authH()}).catch(()=>null);
+  if(!r||!r.ok)return;
+  const d=await r.json();
+  window._tid=id;
+  $("thread").classList.remove("hide");
+  const t=d.ticket;
+  $("tTitle").textContent=`تیکت #${id} — ${t.name||""} ${t.username?"@"+t.username:""} (${t.tg_id}) • ${t.status==="open"?"باز":"بسته"}`;
+  $("tmsgs").innerHTML=d.messages.map(m=>`<div class="ev" style="white-space:pre-wrap;${m.sender==="admin"?"background:var(--accent-soft)":""}"><b>${m.sender==="admin"?"پشتیبانی":"کاربر"}</b> — ${esc(m.text)}<time>${clock(m.ts)}</time></div>`).join("");
+  if(!silent)$("tmsgs").scrollTop=$("tmsgs").scrollHeight;
+}
+async function replyTicket(){
+  const text=$("tReply").value.trim();if(!text)return;
+  try{const d=await post("/api/admin/ticket",{id:window._tid,action:"reply",text});$("tReply").value="";if(!d.delivered)alert("⚠️ ذخیره شد ولی به کاربر نرسید (احتمالاً ربات رو بلاک کرده).");openTicket(window._tid);loadTickets()}catch(e){alert("❌ "+e.message)}
+}
+async function closeTicket(){
+  if(!confirm("این تیکت بسته بشه؟"))return;
+  try{await post("/api/admin/ticket",{id:window._tid,action:"close"});window._tid=null;$("thread").classList.add("hide");loadTickets()}catch(e){alert("❌ "+e.message)}
+}
+async function sendBroadcast(){
+  const text=$("bcText").value.trim();if(!text)return alert("متن پیام رو بنویس");
+  const t=$("bcTarget");const label=t.options[t.selectedIndex].text;
+  if(!confirm(`این پیام برای «${label}» ارسال بشه؟`))return;
+  try{const d=await post("/api/admin/broadcast",{text,target:t.value});$("bcText").value="";alert(`✅ ثبت شد. گیرنده: ${fa(d.total)} نفر (به‌تدریج ارسال می‌شه)`);loadBroadcasts()}catch(e){alert("❌ "+e.message)}
+}
+async function loadBroadcasts(){
+  const r=await fetch("/api/admin/broadcasts",{headers:authH()}).catch(()=>null);
+  if(!r||!r.ok)return;
+  const d=await r.json();
+  const st={running:"در حال ارسال",done:"تمام شد",cancelled:"لغو شد"};
+  $("bcs").innerHTML=d.broadcasts.map(b=>`<div class="arow"><div><b>#${b.id}</b> ${esc(st[b.status]||b.status)}<div class="sub" style="direction:rtl;text-align:right">${esc(b.text.slice(0,60))}</div><div class="sub" style="direction:rtl;text-align:right">✅ ${fa(b.sent)} • ❌ ${fa(b.failed)} • از ${fa(b.total)}</div></div>${b.status==="running"?`<div class="btns" style="margin:0"><button onclick="cancelBroadcast(${b.id})">لغو</button></div>`:""}</div>`).join("")||'<span style="color:var(--muted)">هنوز پیامی ارسال نشده</span>';
+}
+async function cancelBroadcast(id){
+  if(!confirm("ارسال باقی‌مونده لغو بشه؟"))return;
+  try{await post("/api/admin/broadcast",{id,cancel:true});loadBroadcasts()}catch(e){alert("❌ "+e.message)}
+}
+function drawUsers(list,now){
+  window._users=list;
+  $("users").innerHTML=list.map((v,i)=>{
+    const on=now-v.last_seen<90000;
+    const who=v.tg_name||(v.tg_username?"@"+v.tg_username:"")||v.last_name||"ناشناس";
+    const handle=v.tg_username?"@"+v.tg_username+" • ":"";
+    return `<div class="arow"><div><i class="dot ${on?"on":""}"></i><b>${esc(who)}</b>
+      ${v.sub_until&&v.sub_until>now?`<span class="badge">⭐ تا ${new Date(v.sub_until).toLocaleDateString("fa-IR")}</span>`:""}
+      <div class="sub">${esc(handle)}${esc(v.country||"?")}${v.city?" • "+esc(v.city):""} • ${esc(v.device)}${v.last_name?" • "+esc(v.last_name):""}</div>
+      ${v.ul_lim!=null&&(!v.ul_until||v.ul_until>now)?`<span class="badge" style="background:var(--accent-soft);color:var(--accent)">⚙️ ${v.ul_lim} در ${PER[v.ul_period]||""}${v.ul_unlock?" • همه‌امکانات":""}</span>`:""}
+      ${v.banned?`<span class="badge" style="background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger)">🚫 مسدود</span>`:""}
+      ${v.tg_id?`<div class="btns"><button class="ok" onclick="grant('${esc(v.tg_id)}')">⭐ اشتراک</button><button onclick="openLimit(${i})">⚙️ سقف</button>${v.banned?`<button onclick="ban('${esc(v.tg_id)}',false)">✅ رفع مسدودی</button>`:`<button onclick="ban('${esc(v.tg_id)}',true)">🚫 مسدود</button>`}${v.sub_until&&v.sub_until>now?`<button onclick="revoke('${esc(v.tg_id)}')">لغو</button>`:""}</div>`:""}</div>
+      <div style="text-align:left"><span class="num">${fa(v.configs)} کانفیگ</span>
+      <div class="sub" style="direction:rtl;text-align:left">${fa(v.actions)} فعالیت • ${on?"آنلاین":ago(v.last_seen,now)}</div></div></div>`}).join("")||'<span style="color:var(--muted)">هنوز کاربری نیست</span>';
+}
+let uPage=0,uTimer;
+async function loadUsers(){
+  const q=encodeURIComponent($("uq").value.trim()),f=encodeURIComponent($("uf").value);
+  const r=await fetch(`/api/admin/users?q=${q}&filter=${f}&page=${uPage}`,{headers:authH()}).catch(()=>null);
+  if(!r||!r.ok)return;
+  const d=await r.json();
+  if(uPage>0&&uPage>=d.pages){uPage=d.pages-1;return loadUsers()}
+  $("uinfo").textContent=`${fa(d.total)} کاربر • صفحه ${fa(d.page+1)} از ${fa(d.pages)}`;
+  drawUsers(d.users,Date.now());
+}
+function pageU(delta){uPage=Math.max(0,uPage+delta);loadUsers()}
+function searchUsers(){clearTimeout(uTimer);uTimer=setTimeout(()=>{uPage=0;loadUsers()},350)}
+async function dl(type,extra){
+  try{
+    const r=await fetch(`/api/admin/export?type=${type}${extra?"&"+extra:""}`,{headers:authH()});
+    if(!r.ok)throw new Error("خطا در دریافت فایل");
+    const blob=await r.blob();const a=document.createElement("a");
+    a.href=URL.createObjectURL(blob);a.download=`imrc-${type}.csv`;document.body.appendChild(a);a.click();a.remove();
+  }catch(e){alert("❌ "+e.message)}
+}
+function dlUsers(){dl("users",`q=${encodeURIComponent($("uq").value.trim())}&filter=${encodeURIComponent($("uf").value)}`)}
+async function loadReport(){
+  const r=await fetch("/api/admin/report",{headers:authH()}).catch(()=>null);
+  if(!r||!r.ok)return;
+  const d=await r.json();
+  $("rToday").textContent=fa(d.today.amount);$("rMonth").textContent=fa(d.month.amount);
+  $("rAll").textContent=fa(d.total.amount);$("rPay").textContent=fa(d.total.n);
+  const max=Math.max(1,...d.daily.map(x=>x.amount));
+  $("rBars").innerHTML=d.daily.map((x,i)=>`<div><em>${x.amount?fa(Math.round(x.amount/1000)):""}</em><i style="height:${Math.round(x.amount/max*80)}px"></i>${i%5===0?esc(x.label):""}</div>`).join("");
+  $("rMonthly").innerHTML=`<div class="arow" style="font-weight:700;color:var(--muted)"><span>ماه</span><span>درآمد (تومان)</span><span>پرداخت</span><span>کاربر جدید</span><span>کانفیگ</span></div>`
+    +d.monthly.map(m=>`<div class="arow"><span>${esc(m.label)}</span><span class="num">${fa(m.amount)}</span><span>${fa(m.n)}</span><span>${fa(m.usr)}</span><span>${fa(m.cfg)}</span></div>`).join("");
+}
+async function setupBot(){
+  try{
+    const r=await fetch("/api/admin/webhook",{method:"POST",headers:authH()});
+    const d=await r.json();
+    alert(r.ok&&d.ok?"✅ ربات @"+d.bot+" وصل شد.":"❌ "+(d.error||d.description||"خطا"));
+  }catch(e){alert("❌ خطا در اتصال")}
+}
+async function logout(){try{await fetch("/api/admin/logout",{method:"POST"})}catch(e){}sessionStorage.removeItem("imrc_admin");location.reload()}
+/* ===== فاز ۵: عملیات گروهی، پرداخت دستی، شاخص‌ها، ممیزی، پشتیبان، نگهداری ===== */
+async function getJ(path){const r=await fetch(path,{headers:authH()});const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.error||"خطا");return d}
+function esc5(s){return String(s??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
+const ACT_NAME={grant:"افزودن اشتراک",ban:"مسدودسازی",unban:"رفع مسدودی"};
+let bulkSnap=null;
+async function bulkPreview(){
+  const snap={action:$("bulkAct").value,days:$("bulkDays").value,reason:$("bulkReason").value,filter:$("uf").value,q:$("uq").value.trim()};
+  try{
+    const d=await post("/api/admin/bulk",Object.assign({dry_run:true},snap));
+    bulkSnap=Object.assign({count:d.count},snap);
+    $("bulkInfo").textContent=`${ACT_NAME[snap.action]}: ${fa(d.count)} کاربر (حداکثر ${fa(d.max)})`;
+  }catch(e){bulkSnap=null;$("bulkInfo").textContent="❌ "+e.message}
+}
+async function bulkRun(){
+  if(!bulkSnap)return alert("اول پیش‌نمایش بگیر");
+  if(!confirm(`${ACT_NAME[bulkSnap.action]} روی ${fa(bulkSnap.count)} کاربر اعمال شود؟`))return;
+  const snap=bulkSnap;
+  try{
+    const d=await post("/api/admin/bulk",Object.assign({},snap,{dry_run:false,expect:snap.count}));
+    alert(`✅ ${fa(d.affected)} کاربر`);
+    bulkSnap=null;$("bulkInfo").textContent="";
+    loadUsers();loadAudit();
+  }catch(e){alert("❌ "+e.message);bulkSnap=null;$("bulkInfo").textContent=""}
+}
+async function manualPay(){
+  const tg=$("pmTg").value.trim(),plan=$("pmPlan").value.trim(),amount=$("pmAmount").value,note=$("pmNote").value.trim();
+  if(!tg||!plan)return alert("آیدی و کلید پلن را وارد کن");
+  if(!confirm(`پرداخت دستی برای ${tg} با پلن ${plan} ثبت شود؟`))return;
+  try{
+    await post("/api/admin/manual-payment",{tg_id:tg,plan:plan,amount:amount,note:note});
+    alert("✅ ثبت و اشتراک فعال شد");
+    $("pmTg").value="";$("pmAmount").value="";$("pmNote").value="";
+    loadAudit();loadReport();
+  }catch(e){alert("❌ "+e.message)}
+}
+async function loadInsights(){
+  try{
+    const d=await getJ("/api/admin/insights");
+    const cards=[["فعال امروز",d.dau],["فعال ۷ روز",d.wau],["فعال ۳۰ روز",d.mau],["جدید ۷ روز",d.new7],["کاربران ربات",d.tg_users],["خریداران",d.payers]];
+    $("insights").innerHTML=cards.map(([k,v])=>`<div class="card stat"><b>${fa(v)}</b><span>${k}</span></div>`).join("")
+      +`<div class="card stat"><b>${d.retention7.pct===null?"–":fa(d.retention7.pct)+"٪"}</b><span>نگهداری ۷ روزه (${fa(d.retention7.kept)} از ${fa(d.retention7.size)})</span></div>`;
+  }catch(e){$("insights").textContent="❌ "+e.message}
+}
+async function loadRefs(){
+  try{
+    const d=await getJ("/api/admin/referrals");
+    $("refs").innerHTML=d.top.length?d.top.map((r,i)=>`<div class="arow"><span>${i+1}. ${esc5(r.name||r.username||r.referrer)}</span><span class="num">${fa(r.n)} دعوت • ${fa(r.rewarded)} پاداش</span></div>`).join(""):'<span style="color:var(--muted)">هنوز دعوتی ثبت نشده</span>';
+  }catch(e){$("refs").textContent="❌ "+e.message}
+}
+async function loadAudit(){
+  try{
+    const d=await getJ("/api/admin/audit?limit=200");
+    $("audit").innerHTML=d.items.length?d.items.map(a=>`<div class="arow"><div><b>${esc5(a.action)}</b> <span style="color:var(--muted)">${esc5(a.target)}</span><div class="sub">${esc5(a.actor)} • ${esc5(a.detail)}</div></div><span class="num" style="font-size:11px">${new Date(a.ts).toLocaleString("fa-IR",{timeZone:"Asia/Tehran"})}</span></div>`).join(""):'<span style="color:var(--muted)">هنوز اقدامی ثبت نشده</span>';
+  }catch(e){$("audit").textContent="❌ "+e.message}
+}
+async function loadRetention(){
+  try{
+    const d=await getJ("/api/admin/retention");
+    $("retInfo").textContent=d.last?`آخرین اجرا: ${new Date(d.last.at).toLocaleString("fa-IR",{timeZone:"Asia/Tehran"})} • حذف‌شده: رویداد ${fa(d.last.events)}، لاگ ${fa(d.last.audit_log)}، نشست ${fa(d.last.sessions)}`:"هنوز اجرا نشده (هر روز ساعت ۰۴:۰۰ به وقت تهران)";
+  }catch(e){$("retInfo").textContent="❌ "+e.message}
+}
+async function runRetention(){
+  if(!confirm("نگهداری داده الان اجرا شود؟ داده‌های قدیمی و موقت پاک می‌شوند."))return;
+  try{await post("/api/admin/retention",{});loadRetention();loadAudit()}catch(e){alert("❌ "+e.message)}
+}
+/* ===== آرشیو فایل کانفیگ ۳۰ روزه ===== */
+let cfPage=0;
+function cfMove(d){const n=cfPage+d;if(n<0)return;cfPage=n;loadConfigFiles()}
+async function loadConfigFiles(){
+  const q=encodeURIComponent($("cfQ").value||"");
+  const r=await fetch("/api/admin/config-files?q="+q+"&page="+cfPage,{headers:authH()}).catch(()=>null);
+  if(!r||!r.ok)return;
+  const d=await r.json();
+  $("cfCount").textContent=fa(d.total);
+  $("cfSize").textContent=fa(Math.round((d.bytes||0)/1024));
+  $("cfPg").textContent="صفحه‌ی "+fa(cfPage+1);
+  $("cfList").innerHTML=d.items.map(f=>{
+    const who=esc(f.tg_name||("ID "+f.tg_id));
+    const exp=new Date(f.expires).toLocaleDateString("fa-IR");
+    const kb=fa(Math.round((f.size||0)/102.4)/10);
+    return `<div class="arow"><div><b dir="ltr">${esc(f.name||"-")}_${esc(f.region||"")}.conf</b> <span class="badge">${esc(String(f.region||"").toUpperCase())}</span><div class="sub">${who} • ${esc(f.tg_id)} • ${kb} کیلوبایت • تا ${exp}</div></div><div class="btns" style="margin:0"><button onclick="downloadConfigFile(${f.id})">دانلود</button><button onclick="deleteConfigFile(${f.id})" style="color:var(--danger)">حذف</button></div></div>`;
+  }).join("")||'<span style="color:var(--muted)">فایل فعالی نیست</span>';
+}
+async function downloadConfigFile(id){
+  try{
+    const r=await fetch("/api/admin/config-file/"+id,{headers:authH()});
+    if(!r.ok){const d=await r.json().catch(()=>({}));throw new Error(d.error||"خطا")}
+    const b=await r.blob();const m=(r.headers.get("Content-Disposition")||"").match(/filename="([^"]+)"/);
+    const a=document.createElement("a");a.href=URL.createObjectURL(b);a.download=m?m[1]:"imrc.conf";document.body.appendChild(a);a.click();a.remove();
+  }catch(e){alert("❌ "+e.message)}
+}
+async function deleteConfigFile(id){
+  if(!confirm("این فایل کانفیگ همین حالا حذف بشه؟ کاربر دیگه نمی‌تونه دانلودش کنه."))return;
+  try{await post("/api/admin/config-file/delete",{id});loadConfigFiles();loadAudit()}catch(e){alert("❌ "+e.message)}
+}
+async function downloadBackup(){
+  try{
+    const r=await fetch("/api/admin/backup",{headers:authH()});
+    if(!r.ok)throw new Error("خطا در دریافت پشتیبان");
+    const b=await r.blob();const a=document.createElement("a");
+    a.href=URL.createObjectURL(b);a.download="imrc-backup.json";document.body.appendChild(a);a.click();a.remove();
+    loadAudit();
+  }catch(e){alert("❌ "+e.message)}
+}
+/* ===== فاز ۵ (ادامه): کیف پول، حوادث و آپ‌تایم ===== */
+async function loadWallets(){
+  try{
+    const d=await getJ("/api/admin/wallets");
+    $("walletInfo").textContent=`${fa(d.holders)} نفر اعتبار دارن • مجموع: ${fa(d.total)} تومان (بدهی به کاربران)`;
+    $("walletList").innerHTML=d.items.length?d.items.map(w=>`<div class="arow"><span>${esc5(w.name||w.tg_id)} <span class="sub">${esc5(w.tg_id)}</span></span><span class="num">${fa(w.balance)} تومان</span></div>`).join(""):'<span style="color:var(--muted)">اعتباری ثبت نشده</span>';
+  }catch(e){$("walletInfo").textContent="❌ "+e.message}
+}
+async function walletAdjust(){
+  const tg=$("wTg").value.trim(),delta=parseInt($("wDelta").value),reason=$("wReason").value.trim();
+  if(!tg||!delta)return alert("آیدی و مبلغ (غیرصفر) رو وارد کن");
+  if(!confirm(`${fa(delta)} تومان برای ${tg} ثبت شود؟`))return;
+  try{
+    const d=await post("/api/admin/wallet",{tg_id:tg,delta:delta,reason:reason});
+    alert(`✅ موجودی جدید: ${fa(d.balance)} تومان`);
+    $("wTg").value="";$("wDelta").value="";$("wReason").value="";
+    loadWallets();loadAudit();
+  }catch(e){alert("❌ "+e.message)}
+}
+async function loadIncidents(){
+  try{
+    const d=await getJ("/api/admin/incidents");
+    $("upInfo").textContent=d.uptime===null?"آپ‌تایم: هنوز داده‌ای ثبت نشده":`آپ‌تایم ۳۰ روز اخیر: ${Number(d.uptime).toLocaleString("fa-IR",{maximumFractionDigits:2})}٪ (${fa(d.samples)} از ${fa(d.expected)} نمونه؛ گپ کرون = خاموش)`;
+    $("incList").innerHTML=d.items.length?d.items.map(i=>`<div class="arow"><div><b>${esc5(i.title)}</b> <span style="color:var(--muted)">${i.level==="down"?"قطع":"کند"}</span>${i.body?`<div class="sub">${esc5(i.body)}</div>`:""}<div class="sub">${new Date(i.started).toLocaleString("fa-IR",{timeZone:"Asia/Tehran"})} • ${i.resolved?"رفع شد":"باز"}</div></div><span class="btns">${i.resolved?"":`<button onclick="resolveIncident(${i.id})">بستن</button>`}<button onclick="deleteIncident(${i.id})" style="background:#3a1d2a">حذف</button></span></div>`).join(""):'<span style="color:var(--muted)">حادثه‌ای ثبت نشده</span>';
+  }catch(e){$("upInfo").textContent="❌ "+e.message}
+}
+async function createIncident(){
+  const title=$("incTitle").value.trim();
+  if(!title)return alert("عنوان رو بنویس");
+  try{
+    await post("/api/admin/incidents",{action:"create",title:title,level:$("incLevel").value,body:$("incBody").value});
+    $("incTitle").value="";$("incBody").value="";
+    loadIncidents();loadAudit();
+  }catch(e){alert("❌ "+e.message)}
+}
+async function resolveIncident(id){try{await post("/api/admin/incidents",{action:"resolve",id:id});loadIncidents();loadAudit()}catch(e){alert("❌ "+e.message)}}
+async function deleteIncident(id){if(!confirm("این حادثه حذف شود؟"))return;try{await post("/api/admin/incidents",{action:"delete",id:id});loadIncidents();loadAudit()}catch(e){alert("❌ "+e.message)}}
+/* ===== پشتیبانی آنلاین (چت پنل کاربر) ===== */
+let chTg = null;
+let chSearchTimer;
+function chSearch(){ clearTimeout(chSearchTimer); chSearchTimer = setTimeout(loadChatThreads, 300); }
+async function loadChatThreads(){
+  const q = encodeURIComponent(($("chQ").value || "").trim());
+  const r = await fetch("/api/admin/chat/threads?q=" + q, { headers: authH() }).catch(() => null);
+  if (!r || !r.ok) return;
+  const d = await r.json();
+  const n = d.unread_total || 0;
+  const b = $("chBadge");
+  if (b) { b.textContent = fa(n); b.hidden = !n; }
+  $("chCount2").textContent = d.threads.length ? fa(d.threads.length) + " گفتگو" : "";
+  $("chThreads").innerHTML = d.threads.map(function(t){
+    const who = esc(t.name || ("ID " + t.tg_id));
+    const pre = t.last_sender === "admin" ? "شما: " : "";
+    const on = chTg === String(t.tg_id) ? " on" : "";
+    return `<button class="ch-item${on}" onclick="openChat('${esc(t.tg_id)}')">` +
+      `<span class="ch-top"><b>${who}</b>${t.unread ? `<span class="badge bad">${fa(t.unread)}</span>` : ""}</span>` +
+      `<span class="ch-pre sub">${esc(pre + (t.last_text || "").slice(0, 80))}</span>` +
+      `<time>${ago(t.last_ts, Date.now())}</time></button>`;
+  }).join("") || '<span class="sub">هنوز گفتگویی نیست</span>';
+}
+async function openChat(tg, silent){
+  const r = await fetch("/api/admin/chat?tg=" + encodeURIComponent(tg), { headers: authH() }).catch(() => null);
+  if (!r || !r.ok) { if (!silent) alert("❌ خطا در دریافت گفتگو"); return; }
+  const d = await r.json();
+  const log = $("chLog");
+  const near = log.scrollHeight - log.scrollTop - log.clientHeight < 90;
+  const changed = chTg !== String(d.tg_id);
+  chTg = String(d.tg_id);
+  $("chEmpty").classList.add("hide");
+  $("chPane").classList.remove("hide");
+  $("chTitle").textContent = (d.name || "کاربر") + "  •  " + d.tg_id;
+  $("chSub").textContent = d.banned ? "🚫 این کاربر مسدود است" : "";
+  log.innerHTML = d.messages.map(function(m){
+    return `<div class="bubble ${m.from === "admin" ? "admin" : "user"}">${esc(m.text)}<time>${clock(m.ts)}</time></div>`;
+  }).join("") || '<div class="sub">پیامی نیست</div>';
+  if (changed || near || !silent) log.scrollTop = log.scrollHeight;
+  if (!silent) loadChatThreads();
+}
+function updateChReplyCount(){
+  const v = $("chReply").value;
+  $("chReplyCount").textContent = fa(v.length) + " / 3500";
+}
+async function sendChatReply(){
+  const text = $("chReply").value.trim();
+  if (!text || !chTg) return;
+  try{
+    const d = await post("/api/admin/chat/reply", { tg: chTg, text: text });
+    $("chReply").value = "";
+    updateChReplyCount();
+    if (!d.delivered) alert("⚠️ پاسخ ذخیره شد، ولی به تلگرام کاربر نرسید (احتمالاً ربات را بلاک کرده).");
+    await openChat(chTg);
+    loadChatThreads();
+  }catch(e){ alert("❌ " + e.message); }
+}
+$("chReply").addEventListener("input", updateChReplyCount);
+$("chReply").addEventListener("keydown", function(e){ if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) { e.preventDefault(); sendChatReply(); } });
+
+$("pw").addEventListener("keydown",e=>{if(e.key==="Enter")doLogin()});
+load().then(ok=>{if(ok)start();else sessionStorage.removeItem("imrc_admin")});
+
+</script>
+<script>
+
+const SECS = ["ov","chat","tickets","users","income","growth","messages","settings","service","log"];
+function showSec(id){
+  if (!SECS.includes(id)) id = "ov";
+  document.querySelectorAll(".page").forEach(function(s){ s.classList.toggle("active", s.id === "sec-" + id); });
+  document.querySelectorAll(".nav-i[data-sec], .adm-tabs button[data-sec]").forEach(function(b){ b.setAttribute("aria-current", b.dataset.sec === id ? "page" : "false"); });
+  var t = document.getElementById("crumb");
+  var found = document.querySelector('.nav-i[data-sec="' + id + '"]');
+  if (t && found) t.textContent = found.textContent.replace(/\s+/g, " ").trim();
+  if (location.hash !== "#" + id) history.replaceState(null, "", "#" + id);
+  window.scrollTo({ top: 0 });
+}
+window.addEventListener("hashchange", function(){ showSec(location.hash.slice(1)); });
+
+</script>
+<script>
+const FEATURE_GROUPS = [
+{t:"🤖 ربات تلگرام — کاربر",items:[
+{n:"ورود به پنل با تلگرام",d:"از دکمه‌ی «ورود با تلگرام» در سایت، ربات یک لینک ورود می‌فرستد. ورود بدون رمز انجام می‌شود."},
+{n:"منوی «/» و راهنمای ربات",d:"کاربر همه‌ی کارها را از فهرست دستورهای «/» کنار کادر پیام انجام می‌ده: خرید سرور (/server)، کیف پول و شارژ (/wallet)، خرید اشتراک، ساخت کانفیگ، حساب من، دعوت دوستان، کد تخفیف و پشتیبانی. کیبورد ثابت دیگه نمایش داده نمی‌شه."},
+{n:"منوی دستورها (/)",d:"فهرست دستورهای ربات در منوی «/» تلگرام. دستورهای مدیریتی فقط در چت ادمین دیده می‌شوند."},
+{n:"پروفایل ربات",d:"توضیح کامل و توضیح کوتاه ربات. با دکمه‌ی «اتصال ربات» در پنل ادمین تنظیم می‌شوند."},
+{n:"ساخت کانفیگ در ربات (/config)",d:"فرم گام‌به‌گام: کشور، حالت بازی، نقش، DNS، MTU (آماده یا دلخواه) و نام. در پایان فایل .conf فرستاده می‌شود. محدودیت‌ها همان پنل است."},
+{n:"کانفیگ‌های من (/configs)",d:"ده کانفیگ آخر کاربر با نام، کشور، حالت و زمان ساخت. کانفیگ‌هایی که فایلشان هنوز ۳۰ روزه نشده، دکمه‌ی 📥 دارند."},
+{n:"حساب من (/me)",d:"وضعیت اشتراک و روزهای باقی‌مانده، اعتبار دعوت، تعداد تیکت‌های باز و سهمیه‌ی ساخت کانفیگ این دوره."},
+{n:"خرید اشتراک (/plans)",d:"نمایش پلن‌ها و انتخاب پلن. پلن‌ها از تنظیمات پنل قابل ویرایش‌اند."},
+{n:"ارسال رسید پرداخت",d:"بعد از انتخاب پلن، کاربر عکس رسید را همین‌جا می‌فرستد. هر کاربر حداکثر سه رسید در انتظار بررسی می‌تواند داشته باشد."},
+{n:"استفاده از اعتبار کیف پول",d:"بعد از انتخاب پلن، دکمه‌ی «استفاده از اعتبار» نشان داده می‌شود تا اعتبار دعوت روی مبلغ کسر شود. دوباره زدنش آن را برمی‌دارد."},
+{n:"کد تخفیف (/code)",d:"ثبت کد تخفیف. درصد تخفیف روی پلن بعدی که انتخاب و رسیدش فرستاده می‌شود اعمال می‌شود."},
+{n:"دعوت دوستان (/invite)",d:"لینک اختصاصی دعوت و تعداد دعوت‌های موفق. وقتی دعوت‌شده برای اولین بار وارد پنل شود، دعوت‌کننده پاداش می‌گیرد؛ هر دعوت یک بار حساب می‌شود."},
+{n:"پشتیبانی و تیکت (/support)",d:"/support راهنمای پشتیبانی را نشان می‌دهد. هر پیام متنی عادی کاربر یک تیکت می‌سازد یا به تیکت باز اضافه می‌کند و به ادمین خبر داده می‌شود."},
+{n:"پیام یادآوری انقضا",d:"چند روز قبل از پایان اشتراک پیام یادآوری می‌آید. برای هر تاریخ انقضا فقط یک بار. متن و تعداد روز از پنل تنظیم می‌شود."},
+{n:"پیام خوش‌آمد",d:"متن شروع ربات. از تنظیمات پنل ویرایش می‌شود و خالی بودنش یعنی متن پیش‌فرض."},
+{n:"شناسه‌ی تلگرام (/id)",d:"نمایش شناسه‌ی عددی تلگرام. برای تنظیم ADMIN_TG_ID استفاده می‌شود."},
+{n:"دریافت دوباره‌ی فایل کانفیگ (📥)",d:"دکمه‌ی 📥 زیر لیست /configs فایل کانفیگ ۳۰ روز اخیر را دوباره می‌فرستد. فقط برای صاحب همان فایل."},
+{n:"یادآوری حذف فایل (ویژه‌ی اشتراک)",d:"کاربر دارای اشتراک فعال، سه روز قبل از حذف هر فایل کانفیگ، یک پیام تلگرام می‌گیرد. برای هر فایل فقط یک بار."}
+]},
+{t:"🛠 ربات تلگرام — ادمین",items:[
+{n:"پنل مدیریت در ربات (/panel)",d:"دکمه‌ی باز کردن پنل، لینک ورود خودکار یک‌بار مصرف (ده دقیقه اعتبار) و شمار تیکت‌های باز."},
+{n:"لیست تیکت‌ها (/tickets)",d:"فهرست تیکت‌ها با فیلتر open، closed یا all. از هر تیکت می‌شود آن را دید، بست یا دوباره باز کرد."},
+{n:"پاسخ به تیکت (/reply)",d:"دستور /reply شماره‌ی تیکت متن برای جواب مستقیم. یا روی اعلان همان تیکت Reply کنی."},
+{n:"پاسخ‌های آماده",d:"پنج متن آماده برای جواب سریع به تیکت، از دکمه‌ی پاسخ آماده زیر اعلان تیکت."},
+{n:"بستن خودکار تیکت‌های بی‌پاسخ",d:"اگر ادمین آخرین نفر جواب داده باشد و کاربر هفتاد و دو ساعت جواب ندهد، تیکت بسته و کاربر خبردار می‌شود."},
+{n:"تأیید یا رد رسید از تلگرام",d:"زیر هر رسید دکمه‌های «تأیید» (با نام هر پلن) و «رد» هست. تأیید اشتراک را فعال و به کاربر خبر می‌دهد؛ یک رسید دوبار اشتراک را تمدید نمی‌کند."},
+{n:"اعلان‌های ادمین",d:"خبر کاربر جدید، رسیدن کاربر به سقف و رسید جدید. از تنظیمات قابل خاموش شدن است."},
+{n:"ورود ادمین با تلگرام",d:"تأیید ورود ادمین از داخل ربات. فقط برای ADMIN_TG_ID کار می‌کند."}
+]},
+{t:"📱 پنل کاربر — خانه و ساخت",items:[
+{n:"ساخت و دانلود کانفیگ",d:"انتخاب کشور، حالت، نقش، DNS، MTU و نام؛ بعد دانلود فایل .conf."},
+{n:"کپی کانفیگ، Endpoint و QR",d:"کپی کل کانفیگ یا Endpoint، و نمایش QR کد برای اسکن با گوشی."},
+{n:"ساخت سریع (Ctrl+Enter)",d:"ساخت کانفیگ با یک کلید و تنظیمات فعلی فرم."},
+{n:"یک‌کلیک بهینه کالاف",d:"تنظیم یک‌کلیکی برای رنکد با ترکیه و MTU کم؛ فایل همان لحظه دانلود می‌شود."},
+{n:"پریست‌های آماده",d:"رنکد حرفه‌ای، کم‌پینگ و بتل‌رویال با یک کلیک."},
+{n:"دستگاه ضعیف یا پرچم‌دار",d:"تنظیم MTU متناسب با دستگاه: ضعیف MTU ۱۲۸۰ و پرچم‌دار MTU ۱۴۲۰."},
+{n:"نام کانفیگ",d:"نام خودکار یا دلخواه. همیشه با IMRC شروع می‌شود و حداکثر ۱۵ کاراکتر دارد."},
+{n:"تعداد کاربر",d:"انتخاب ۱ تا ۱۰ کاربر. فقط نمایشی است و به سرور فرستاده نمی‌شود."},
+{n:"مدت",d:"انتخاب مدت ۷ روز تا یک سال. فقط نمایشی است و به سرور فرستاده نمی‌شود."},
+{n:"DNS و MTU در کانفیگ",d:"دو کلید جدا برای اینکه DNS و MTU در فایل کانفیگ باشند یا نه."},
+{n:"فهرست سرورها و پینگ زنده",d:"کشورها با پینگ. پینگ‌ها هر ۳ ثانیه کمی حول مقدار پایه‌شان تغییر می‌کنند."},
+{n:"هشدار پینگ بالا",d:"وقتی پینگ کشور انتخاب‌شده از ۷۵ میلی‌ثانیه بیشتر شود، هشدار «پینگ این سرور بالاست» نشان داده می‌شود."},
+{n:"پیشنهاد کالاف",d:"شش کشور با کمترین پینگ که برای کالاف مناسب‌اند."},
+{n:"ستاره‌دارها",d:"کشورهای مورد علاقه را ستاره می‌زنی و با «ستاره‌دارها» فقط همان‌ها را می‌بینی."},
+{n:"سرور جایگزین فوری",d:"انتخاب سریع یک سرور دیگر و ساخت فوری فایل کانفیگ جدید."},
+{n:"رادار سرورها",d:"نمای دایره‌ای؛ هر نقطه یک سرور است و نزدیک‌تر یعنی پینگ کمتر. با لمس، سرور انتخاب می‌شود."},
+{n:"تخمین SR بر اساس پینگ",d:"تخمین امتیاز رنک این سشن بر اساس پینگ."},
+{n:"سهمیه‌ی ساخت کانفیگ",d:"نمایش سهمیه‌ی باقی‌مانده. وقتی تمام شد، پیام خرید اشتراک نشان داده می‌شود."},
+{n:"تاریخچه‌ی کانفیگ‌ها (این مرورگر)",d:"کانفیگ‌های ساخته‌شده در همین مرورگر با جست‌وجو، تگ، یادداشت و خروجی CSV."},
+{n:"سابقه‌ی حساب من (روی سرور)",d:"کانفیگ‌های ساخته‌شده با زمان و تنظیماتشان. فایل کامل هر کانفیگ تا ۳۰ روز قابل دانلود دوباره است و بعد حذف می‌شود."},
+{n:"اشتراک‌گذاری کانفیگ",d:"ارسال کانفیگ به تلگرام یا واتساپ. بخشی از متن (تا ۵۰۰ کاراکتر) فرستاده می‌شود."},
+{n:"کانال رسمی IMRC",d:"کارت کانال رسمی (@IMRC_Panel) با توضیح آپدیت‌ها و سرورهای جدید."},
+{n:"دانلود WireGuard (گوگل پلی)",d:"کارت اپ رسمی WireGuard با لینک گوگل پلی (com.wireguard.android) و صفحه‌ی رسمی برای ویندوز، مک و آیفون."},
+{n:"راهنمای کامل و کاربردها",d:"صفحه‌ی راهنما: این پنل به چه دردی می‌خوره، نصب روی گوشی، اتصال گام‌به‌گام و عیب‌یابی اتصال."},
+{n:"دانلود دوباره‌ی فایل از سابقه",d:"در بخش «سابقه‌ی حساب من» دکمه‌ی «دانلود فایل» برای کانفیگ‌های ۳۰ روز اخیر هست."}
+]},
+{t:"🎮 پنل کاربر — کالاف",items:[
+{n:"نقش‌ها",d:"Attacker (تهاجمی یا ورود اول)، Defender (نگهداری نقطه) و Support (پشتیبانی تیم). نقش در کانفیگ ثبت می‌شود."},
+{n:"حالت تورنمنت",d:"فعال‌سازی پریست تورنمنت با یک دکمه."},
+{n:"ریست رنک و بهترین زمان",d:"زمان باقی‌مانده تا ریست رنک و زمان‌های پیشنهادی برای بازی."},
+{n:"پینگ‌های بازی",d:"هدف پینگ ماهانه برای پیگیری و نمودار پینگ."},
+{n:"پرتکرارترین کشورها",d:"کشورهایی که بیشتر استفاده کرده‌ای و نمودار آن."},
+{n:"دستاوردها",d:"نشان‌ها و دستاوردهایی که با ساخت کانفیگ و استفاده از پنل باز می‌شوند."}
+]},
+{t:"🧰 پنل کاربر — ابزارها",items:[
+{n:"تست پینگ زنده",d:"میانگین پینگ، جیتر و درصد افت بسته."},
+{n:"محاسبه TTK",d:"محاسبه‌ی زمان کشتن حریف بر اساس دمیج، RPM و تعداد گلوله."},
+{n:"چک‌لیست لودات",d:"پنج جای لودات: سلاح اصلی، سلاح فرعی و سه پرک. حالت ذخیره‌شده در مرورگر است."},
+{n:"یادداشت لودات",d:"دفترچه‌ی یادداشت برای لودات، کالربندی و برنامه‌ی تمرین. در مرورگر ذخیره می‌شود."},
+{n:"تیم",d:"ثبت نام چهار هم‌تیمی."},
+{n:"تگ حالت بازی",d:"افزودن برچسب حالت بازی به کانفیگ‌ها برای پیدا کردن راحت‌تر در تاریخچه."},
+{n:"تایمر عملیات",d:"تایمر مرحله‌ی بازی."},
+{n:"پایان فصل",d:"شمارش روزهای باقی‌مانده تا تاریخ پایان فصل."},
+{n:"ساعت‌ها",d:"ساعت تهران و ساعت دوم."},
+{n:"نشان‌ها",d:"نشان‌هایی که با پیشرفت آمار باز می‌شوند؛ نشان جدید اعلام می‌شود."},
+]},
+{t:"⚙️ پنل کاربر — تنظیمات و عمومی",items:[
+{n:"تم",d:"شش تم: روشن، تاریک، طلایی، قرمز، نئون و سبز. انتخاب ذخیره می‌شود."},
+{n:"اندازه‌ی متن",d:"کوچک یا بزرگ کردن متن با A− و A+."},
+{n:"صدا و ویبره",d:"روشن یا خاموش کردن صدا و ویبره."},
+{n:"حالت حرفه‌ای",d:"مخفی کردن راهنماها برای نمای تمیزتر."},
+{n:"حالت مطالعه و تمام‌صفحه",d:"حالت مطالعه برای خواندن راحت و نمایش تمام‌صفحه."},
+{n:"پالت فرمان (Ctrl+K)",d:"جست‌وجو و اجرای همه‌ی دستورها با کیبورد."},
+{n:"میانبرهای کیبورد",d:"نمایش فهرست میانبرها."},
+{n:"کارت شروع راهنما",d:"کارت شروع در خانه: سه قدم اول، با دکمه‌ی پنهان و نمایش دوباره."},
+{n:"نصب روی گوشی (PWA)",d:"نصب پنل روی صفحه‌ی اصلی گوشی. صفحه‌ی آفلاین هم دارد."},
+{n:"اعلان مرورگر",d:"اعلان Web Push برای یادآوری و رسید. تا پنج دستگاه."},
+{n:"English / فارسی",d:"تغییر زبان پنل. انتخاب ذخیره می‌شود."},
+{n:"پشتیبانی آنلاین (چت)",d:"گفت‌وگوی زنده با پشتیبانی داخل پنل. پیام‌ها در بخش «پشتیبانی آنلاین» پنل ادمین دیده و پاسخ داده می‌شوند."},
+{n:"پالت فرمان (Ctrl+K)",d:"جست‌وجو و اجرای دستورها با کیبورد."},
+{n:"راهنمای کامل (/help)",d:"کاربردها، مراحل نصب و اتصال WireGuard، عیب‌یابی و سوالات متداول. لینک مستقیم به بخش اتصال هم دارد."},
+{n:"وضعیت سرویس (/status)",d:"صفحه‌ی عمومی وضعیت پنل، پایگاه داده و کارهای زمان‌بندی‌شده."},
+{n:"بکاپ و بازگردانی تنظیمات",d:"ذخیره و بازگردانی تنظیمات پنل."},
+{n:"پاک کردن همه‌ی داده‌ها",d:"پاک کردن داده‌های محلی مرورگر."},
+{n:"خروج از همه‌ی دستگاه‌ها",d:"پایان همه‌ی نشست‌های همین حساب."},
+{n:"ورود و بررسی عضویت کانال",d:"ورود فقط با تلگرام. اگر عضو کانال نباشی، پیام عضویت نشان داده می‌شود."}
+]},
+{t:"🖥 پنل ادمین — ورود و نمای کلی",items:[
+{n:"ورود ادمین",d:"با تأیید در تلگرام یا رمز پشتیبان. پنج تلاش اشتباه از هر IP، پانزده دقیقه قفل می‌کند. سی تلاش اشتباه در ساعت، سی دقیقه قفل سراسری می‌سازد."},
+{n:"خروج ادمین",d:"پایان نشست پنل ادمین در همین مرورگر."},
+{n:"English / فارسی در پنل ادمین",d:"تغییر زبان پنل ادمین. متن‌های فارسی این بخش ترجمه نشده‌اند."},
+{n:"اتصال ربات",d:"ثبت وب‌هوک، منوی «/» و توضیحات پروفایل ربات با یک دکمه."},
+{n:"آمار زنده",d:"آنلاین الان، کانفیگ امروز، کل کانفیگ‌ها، کل کاربران، کاربر فعال امروز، کل بازدیدها، کل فعالیت‌ها و کانفیگ به‌ازای هر کاربر."},
+{n:"نمودار کانفیگ ۱۴ روز",d:"تعداد کانفیگ ساخته‌شده هر روز."},
+{n:"پرکاربردترین کشورها و حالت‌ها",d:"کشورها و حالت‌هایی که بیشتر استفاده شده‌اند."},
+{n:"به‌روزرسانی خودکار",d:"داده‌های پنل هر ۱۵ ثانیه تازه می‌شوند."}
+]},
+{t:"⚙️ پنل ادمین — محدودیت و اشتراک",items:[
+{n:"سقف کانفیگ (رایگان و اشتراک)",d:"تعداد کانفیگ مجاز برای کاربر بدون اشتراک و با اشتراک. مقدار پیش‌فرض همه‌ی کاربران است."},
+{n:"سقف اختصاصی هر کاربر (⚙️ سقف)",d:"تنظیم سقف و دوره‌ی سهمیه (روز، هفته یا ماه) برای یک کاربر خاص."},
+{n:"بازنشانی سهمیه",d:"سهمیه‌ها ساعت ۰۰:۰۰ به وقت ایران ریست می‌شوند (هفته از شنبه، ماه شمسی)."},
+{n:"کشورهای رایگان",d:"کدهای دو حرفی کشورهایی که کاربر بدون اشتراک می‌تواند بسازد، مثل tr,de,ae."},
+{n:"پیام خرید اشتراک",d:"متنی که وقتی سقف تمام شد نشان داده می‌شود. آیدی تلگرام یا راه پرداخت را اینجا بنویس."},
+{n:"پلن‌های اشتراک",d:"هر خط یک پلن: کلید|نام|روز|قیمت به تومان، مثلاً m|ماهانه|30|150000."},
+{n:"متن پرداخت",d:"شماره کارت و توضیح پرداخت که در پیام خرید ربات نشان داده می‌شود."},
+{n:"پاداش دعوت",d:"تعداد روز اشتراک رایگان و اعتبار کیف پول به ازای هر دعوت موفق. صفر یعنی غیرفعال."},
+{n:"یادآوری انقضا",d:"چند روز قبل از پایان اشتراک به کاربر پیام داده شود. صفر یعنی غیرفعال."},
+{n:"اعلان به تلگرام ادمین",d:"اعلان کاربر جدید و رسیدن کاربر به سقف."},
+{n:"وضعیت سرویس و پیام وضعیت",d:"وضعیت عمومی در صفحه‌ی /status و پیام اختیاری (تا ۲۰۰ کاراکتر) برای کاربران."},
+{n:"متن‌های ربات",d:"متن خوش‌آمد، یادآور انقضا و تأیید پرداخت. متغیرهای {days}، {date} و {plan} قابل استفاده‌اند."}
+]},
+{t:"🎫 پنل ادمین — تیکت و پیام همگانی",items:[
+{n:"تیکت‌های پشتیبانی",d:"لیست باز و بسته، مشاهده‌ی گفت‌وگو، پاسخ از پنل و بستن تیکت."},
+{n:"پیام همگانی",d:"ارسال به همه‌ی کاربران ربات، فقط دارای اشتراک یا فقط بدون اشتراک. ارسال تدریجی است و وسط کار می‌شود لغوش کرد."},
+{n:"تاریخچه‌ی پیام‌های همگانی",d:"فهرست بیست پیام آخر و وضعیت هر کدام: در حال ارسال، تمام شده یا لغو شده."}
+]},
+{t:"🎟 پنل ادمین — کد تخفیف و درآمد",items:[
+{n:"کدهای تخفیف",d:"ساخت کد با درصد تخفیف، سقف استفاده، مدت اعتبار به روز و فعال یا غیرفعال کردن هر کد."},
+{n:"درآمد امروز و این ماه",d:"جمع درآمد امروز (تومان) و نمودار ۳۰ روز اخیر به هزار تومان."},
+{n:"گزارش ماهانه (شمسی)",d:"ماه‌های اخیر: درآمد، تعداد پرداخت، رسید ردشده، کاربر جدید و کانفیگ ساخته‌شده."},
+{n:"خروجی CSV",d:"فایل کاربران با فیلتر فعلی، همه‌ی رسیدها یا گزارش ماهانه. فایل با BOM برای نمایش درست فارسی ساخته می‌شود."}
+]},
+{t:"👥 پنل ادمین — کاربران",items:[
+{n:"جستجوی کاربر",d:"جست‌وجو در نام، نام خانوادگی، @یوزرنیم، آیدی تلگرام و شهر."},
+{n:"فیلترهای کاربران",d:"همه، دارای اشتراک، اشتراک منقضی، بدون اشتراک، مسدود، جدید (۷ روز) و غیرفعال (۳۰ روز)."},
+{n:"صفحه‌بندی",d:"پنجاه کاربر در هر صفحه."},
+{n:"اشتراک دستی (⭐ اشتراک)",d:"اعطا یا لغو اشتراک یک کاربر به تعداد روز دلخواه."},
+{n:"مسدود و رفع مسدودی",d:"بن یا رفع بن یک کاربر. ادمین اصلی هرگز بن نمی‌شود."},
+{n:"عملیات گروهی",d:"روی نتیجه‌ی فیلتر و جستجو: اعطای اشتراک یا بن. ابتدا پیش‌نمایش گرفته می‌شود و حداکثر ۵۰۰ کاربر در هر عملیات."},
+{n:"ثبت پرداخت دستی",d:"ثبت پرداخت نقدی یا دستی و فعال‌سازی اشتراک. این پرداخت در گزارش درآمد حساب می‌شود."}
+]},
+{t:"📊 پنل ادمین — رشد، دعوت و کیف پول",items:[
+{n:"شاخص‌های رشد",d:"کاربران فعال روزانه، هفتگی و ماهانه، کاربر جدید ۷ روز، نگهداری کاربران و تعداد خریداران."},
+{n:"برترین دعوت‌کننده‌ها",d:"بیست دعوت‌کننده‌ی برتر."},
+{n:"کیف پول اعتبار دعوت",d:"موجودی کیف پول کاربران و تغییر دستی آن (افزایش یا کاهش) با ثبت دلیل."}
+]},
+{t:"🗂 پنل ادمین — آرشیو فایل کانفیگ",items:[
+{n:"فهرست فایل‌های فعال",d:"همه‌ی فایل‌های کانفیگ ۳۰ روزه با آیدی تلگرام، نام، کشور، حجم و تاریخ انقضا. جستجو با آیدی یا نام است."}
+]},
+{t:"🛟 پنل ادمین — آپ‌تایم، پشتیبان و نگهداری",items:[
+{n:"آپ‌تایم و تاریخچه‌ی ۳۰ روزه",d:"نوار روزانه و درصد آپ‌تایم. نمونه‌برداری هر پنج دقیقه."},
+{n:"حوادث سرویس",d:"ثبت، بستن، حذف و مشاهده‌ی حوادث. بیست حادثه‌ی آخر در صفحه‌ی وضعیت دیده می‌شود."},
+{n:"پشتیبان JSON",d:"دانلود پشتیبان کاربران، اشتراک‌ها، رسیدها، تیکت‌ها، کیف پول، کدهای تخفیف و حوادث. کلید کانفیگ، سشن یا توکن ورود در آن نیست."},
+{n:"نگهداری خودکار داده",d:"هر روز ساعت ۰۴:۰۰ تهران: پاک کردن رویدادهای قدیمی‌تر از ۳۶۵ روز، گزارش فعالیت قدیمی‌تر از ۷۳۰ روز، نشست‌های منقضی و داده‌های موقت. کاربر، اشتراک، رسید و تیکت دست‌نخورده می‌مانند. اجرای دستی هم دارد."},
+{n:"گزارش فعالیت ادمین",d:"ثبت کارهای مهم ادمین: اشتراک، بن، تنظیمات، پشتیبان، پرداخت، تیکت، کد تخفیف و پیام همگانی."},
+{n:"خروج از همه‌ی دستگاه‌ها (کاربر)",d:"پایان همه‌ی نشست‌های یک کاربر با یک دکمه."},
+{n:"محدودیت نرخ",d:"ساخت کانفیگ سی بار در دقیقه برای هر کاربر و ورود بیست بار در دقیقه برای هر IP."},
+{n:"هدرهای امنیتی",d:"هدرهای امنیتی روی همه‌ی پاسخ‌ها. سیاست CSP فعلاً فقط گزارش می‌دهد (Report-Only) و هنوز اجرا نمی‌شود."}
+]},
+{t:"🔔 سرویس‌های پس‌زمینه (خودکار)",items:[
+{n:"کارهای هر دقیقه (Cron)",d:"ضربان سلامت، یادآوری انقضا، ارسال تدریجی پیام همگانی، بستن تیکت‌های بی‌پاسخ و نمونه‌برداری آپ‌تایم."},
+{n:"اعلان Web Push",d:"اعلان مرورگر با کلیدهای VAPID و تا پنج دستگاه برای هر کاربر."},
+{n:"صفحه‌ی وضعیت و ضربان Cron",d:"اگر Cron بیش از سه دقیقه ساکت باشد، وضعیت «کند» نشان داده می‌شود."},
+{n:"حذف فایل کانفیگ بعد از ۳۰ روز",d:"هر دقیقه فایل‌های کانفیگی که ۳۰ روزشان تمام شده حذف می‌شوند و دیگر از پنل، ربات یا پنل ادمین قابل دانلود نیستند."}
+]}
+];
+
+function renderFeatures(){
+  var box = document.getElementById("featGroups");
+  var term = (document.getElementById("featSearch").value || "").trim().toLowerCase();
+  box.textContent = "";
+  var shown = 0;
+  FEATURE_GROUPS.forEach(function(g){
+    var items = g.items.filter(function(it){
+      return !term || (it.n + " " + it.d).toLowerCase().indexOf(term) > -1;
+    });
+    if (!items.length) return;
+    shown += items.length;
+    var det = document.createElement("details");
+    if (term) det.open = true;
+    var sum = document.createElement("summary");
+    sum.textContent = g.t + " (" + items.length + ")";
+    det.appendChild(sum);
+    items.forEach(function(it){
+      var row = document.createElement("div");
+      row.className = "feat";
+      var name = document.createElement("b");
+      name.textContent = it.n;
+      var desc = document.createElement("p");
+      desc.textContent = it.d;
+      row.appendChild(name);
+      row.appendChild(desc);
+      det.appendChild(row);
+    });
+    box.appendChild(det);
+  });
+  if (!shown) box.textContent = "موردی پیدا نشد.";
+  document.getElementById("featCount").textContent = term ? shown + " از " + total_features() : total_features();
+}
+function total_features(){
+  return FEATURE_GROUPS.reduce(function(n, g){ return n + g.items.length; }, 0);
+}
+renderFeatures();
+
+</script>
+<script src="/i18n-en.js"></script>
+</body>
+</html>

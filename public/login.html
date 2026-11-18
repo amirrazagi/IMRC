@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="light">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="robots" content="noindex,nofollow"/>
+<meta name="theme-color" content="#f3f5f9"/>
+<link rel="stylesheet" href="/panel.css"/>
+<title>IMRC • ورود</title>
+</head>
+<body>
+<main class="auth">
+  <section class="card auth-card" aria-labelledby="loginTitle">
+    <div class="logo" aria-hidden="true">IMRC</div>
+    <h1 id="loginTitle">ورود به پنل IMRC</h1>
+    <p id="intro">برای ورود، حساب تلگرامت را تأیید کن. نیازی به رمز عبور نیست.</p>
+
+    <div id="stepLogin" class="stack">
+      <button id="btn" class="btn primary" type="button">✈️ ورود با تلگرام</button>
+      <a id="tgLink" class="btn" href="#" target="_blank" rel="noopener" hidden>باز کردن تلگرام</a>
+    </div>
+
+    <div id="stepJoin" class="stack" hidden>
+      <p>برای استفاده از پنل باید عضو کانال ما باشی.</p>
+      <a class="btn" id="joinLink" href="https://t.me/IMRC_Panel" target="_blank" rel="noopener">📢 عضویت در کانال @IMRC_Panel</a>
+      <button id="joinCheck" class="btn primary" type="button">✅ عضو شدم، بررسی کن</button>
+    </div>
+
+    <div id="msg" class="auth-msg" role="status" aria-live="polite"></div>
+    <p class="hint">با ورود، نام و یوزرنیم تلگرامت برای آمار استفاده ثبت می‌شود.</p>
+    <p class="hint"><a href="/">بازگشت به صفحه‌ی اصلی</a></p>
+  </section>
+</main>
+<script>
+(function () {
+  "use strict";
+  var TOKEN_KEY = "imrc_tok";
+  var $ = function (id) { return document.getElementById(id); };
+  var timer = null, busy = false;
+
+  // use the same theme as the panel (stored as JSON string under IMRC_theme)
+  try {
+    var th = JSON.parse(localStorage.getItem("IMRC_theme") || '""');
+    if (["light", "dark", "gold", "red", "neon", "green"].indexOf(th) > -1) document.documentElement.dataset.theme = th;
+  } catch (e) { /* ignore */ }
+
+  function say(text, err) {
+    var m = $("msg");
+    m.textContent = text;
+    m.className = "auth-msg" + (err ? " err" : "");
+  }
+  function stop() { clearInterval(timer); timer = null; }
+  function clearToken() { try { sessionStorage.removeItem(TOKEN_KEY); } catch (e) { /* ignore */ } }
+  function showLogin() { $("stepLogin").hidden = false; $("stepJoin").hidden = true; }
+  function showJoin() { $("stepLogin").hidden = true; $("stepJoin").hidden = false; }
+
+  // poll the server until Telegram confirms the login (in-page; never navigates away)
+  async function check() {
+    var t = sessionStorage.getItem(TOKEN_KEY);
+    if (!t || busy) return;
+    busy = true;
+    try {
+      var r = await fetch("/api/auth/check?token=" + encodeURIComponent(t), { credentials: "same-origin", cache: "no-store" });
+      var d = await r.json();
+      if (d.status === "ok") {
+        stop(); clearToken();
+        say("✅ وارد شدی، در حال انتقال…");
+        location.replace("/");
+        return;
+      }
+      if (d.status === "banned") {
+        stop(); clearToken();
+        $("tgLink").hidden = true;
+        say("⛔ حساب تو مسدود شده و امکان ورود نداری.", true);
+        $("btn").disabled = true;
+      } else if (d.status === "expired") {
+        stop(); clearToken();
+        $("tgLink").hidden = true;
+        say("لینک ورود منقضی شد. دوباره امتحان کن.", true);
+        $("btn").disabled = false;
+      }
+    } catch (e) { /* network hiccup: keep polling */ }
+    busy = false;
+  }
+  function poll() { stop(); timer = setInterval(check, 2000); check(); }
+
+  async function startLogin() {
+    $("btn").disabled = true;
+    say("در حال آماده‌سازی…");
+    try {
+      var r = await fetch("/api/auth/start", { method: "POST", credentials: "same-origin" });
+      var d = await r.json();
+      if (!r.ok) throw new Error(d.error || "خطا");
+      sessionStorage.setItem(TOKEN_KEY, d.token);
+      var link = $("tgLink");
+      link.href = d.url;
+      link.hidden = false;
+      say("تلگرام رو باز کن، Start رو بزن و به همین صفحه برگرد.");
+      poll();
+      // try to open Telegram in a new tab; the current page stays here and keeps polling.
+      // (If the browser blocks it, the "باز کردن تلگرام" button does the same.)
+      var w = window.open(d.url, "_blank");
+      if (!w) say("تلگرام باز نشد؛ دکمه‌ی «باز کردن تلگرام» را بزن.");
+    } catch (e) {
+      say(e.message || "خطا در اتصال", true);
+      $("btn").disabled = false;
+    }
+  }
+
+  async function checkJoin() {
+    say("در حال بررسی عضویت…");
+    try {
+      var r = await fetch("/api/member/check", { credentials: "same-origin", cache: "no-store" });
+      if (r.status === 401) {
+        showLogin();
+        $("btn").disabled = false;
+        say("اول با تلگرام وارد شو.", true);
+        return;
+      }
+      var d = await r.json();
+      if (d.ok) { say("✅ عضویت تأیید شد، در حال انتقال…"); location.replace("/"); }
+      else say("هنوز عضو کانال نیستی. اول عضو شو و دوباره بزن.", true);
+    } catch (e) { say("خطا در اتصال", true); }
+  }
+
+  $("btn").addEventListener("click", startLogin);
+  $("joinCheck").addEventListener("click", checkJoin);
+  document.addEventListener("visibilitychange", function () { if (!document.hidden) check(); });
+
+  if (new URLSearchParams(location.search).get("join") === "1") {
+    showJoin();
+    say("برای ادامه باید عضو کانال باشی.");
+  }
+  if (sessionStorage.getItem(TOKEN_KEY)) {
+    $("btn").disabled = true;
+    say("منتظر تأیید تلگرام…");
+    $("tgLink").hidden = false;
+    poll();
+  }
+})();
+</script>
+</body>
+</html>

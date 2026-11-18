@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl" data-theme="light">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="robots" content="noindex"/>
+<meta name="theme-color" content="#f3f5f9"/>
+<meta name="description" content="پنل IMRC: ساخت کانفیگ WireGuard برای کالاف، سرورها، ابزارها، پشتیبانی آنلاین و راهنما."/>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+<meta name="apple-mobile-web-app-capable" content="yes"/>
+<meta name="apple-mobile-web-app-title" content="IMRC"/>
+<link rel="stylesheet" href="/panel.css"/>
+<title>IMRC • پنل کانفیگ کالاف</title>
+</head>
+<body>
+<a class="skip" href="#content">رفتن به محتوا</a>
+
+<div class="app">
+  <!-- ===== sidebar (desktop) ===== -->
+  <aside class="side" id="side" aria-label="منوی اصلی">
+    <div class="brand">
+      <div class="logo" aria-hidden="true">IMRC</div>
+      <div><b>پنل IMRC</b><small>کانفیگ WireGuard برای کالاف</small></div>
+    </div>
+    <nav class="nav" aria-label="بخش‌های پنل">
+      <div class="nav-g">شروع</div>
+      <button class="nav-i" data-page="home"><span class="ni" aria-hidden="true">🏠</span>خانه</button>
+      <div class="nav-g">ساخت و ابزار</div>
+      <button class="nav-i" data-page="build"><span class="ni" aria-hidden="true">⚡</span>ساخت کانفیگ</button>
+      <button class="nav-i" data-page="codm"><span class="ni" aria-hidden="true">🎯</span>ابزارهای کالاف</button>
+      <button class="nav-i" data-page="tools"><span class="ni" aria-hidden="true">🧰</span>ابزارهای کمکی</button>
+      <div class="nav-g">حساب من</div>
+      <button class="nav-i" data-page="stats"><span class="ni" aria-hidden="true">📊</span>آمار و سوابق</button>
+      <button class="nav-i" data-page="support"><span class="ni" aria-hidden="true">💬</span>پشتیبانی آنلاین <span class="count" data-chat-badge hidden>۰</span></button>
+      <button class="nav-i" data-page="help"><span class="ni" aria-hidden="true">📘</span>راهنما</button>
+      <button class="nav-i" data-page="settings"><span class="ni" aria-hidden="true">⚙️</span>تنظیمات</button>
+    </nav>
+    <div class="side-foot">
+      <button class="btn block" data-act="palette">دسترسی سریع <small>(Ctrl+K)</small></button>
+    </div>
+  </aside>
+
+  <div class="main">
+    <header class="top">
+      <div class="crumb" id="crumb">خانه</div>
+      <div class="top-r">
+        <a class="pill" id="statusPill" href="/status.html" title="وضعیت سرویس">سرویس: در حال بررسی</a>
+        <button class="icon-btn" data-act="cycleTheme" title="تغییر تم" aria-label="تغییر تم">🎨</button>
+        <button class="icon-btn focus-exit" id="btnFocusExit" data-act="focusExit">خروج از حالت تمرکز</button>
+        <span class="user" id="userChip">—</span>
+      </div>
+    </header>
+
+    <div class="quota" id="quotaBar" hidden>
+      <span id="quotaText">در حال بارگذاری…</span>
+      <div class="row">
+        <div class="meter" aria-hidden="true"><i id="quotaMeter" style="width:0"></i></div>
+        <button class="btn sm primary" data-act="buy">⭐ اشتراک</button>
+      </div>
+    </div>
+
+    <main class="content" id="content" tabindex="-1">
+
+      <!-- ================= HOME ================= -->
+      <section class="page" id="page-home" data-title="خانه">
+        <div class="page-h">
+          <h1>خوش اومدی 👋</h1>
+          <p>اینجا کانفیگ WireGuard آماده‌ی کالاف می‌سازی، فایل را دانلود می‌کنی و در اپ WireGuard وصل می‌شوی.</p>
+        </div>
+        <div class="row spread" style="margin-bottom:.8rem">
+          <span></span>
+          <button class="btn sm" id="bxShowBtn" data-act="showStart" hidden>📘 نمایش راهنمای شروع</button>
+        </div>
+        <div class="banner warn" id="bxExp" hidden></div>
+
+        <section class="card" id="bxStart" aria-labelledby="bxTitle">
+          <div class="card-h">
+            <div>
+              <div class="badge accent">شروع اینجا</div>
+              <h2 id="bxTitle" style="margin-top:.4rem">کانفیگ آماده‌ی بازی، در ۳ قدم</h2>
+              <p class="hint">IMRC یک فایل کانفیگ WireGuard می‌سازد. فایل را دانلود می‌کنی، در اپ رسمی WireGuard وارد می‌کنی و وصل می‌شوی.</p>
+            </div>
+            <div class="row">
+              <a class="pill" id="bxStatus" href="/status.html" target="_blank" rel="noopener">سرویس: در حال بررسی…</a>
+              <button class="btn sm ghost" data-act="hideStart">پنهان کردن</button>
+            </div>
+          </div>
+          <div class="steps">
+            <div class="step" id="bxS1">
+              <span class="n">۱</span><b>کشور را انتخاب کن</b>
+              <small>سروری با پینگ کمتر، یعنی تأخیر کمتر در بازی.</small>
+              <div class="row">
+                <button class="btn sm" data-act="goRegion">انتخاب کشور</button>
+                <button class="btn sm" data-act="suggest">پیشنهاد بده</button>
+              </div>
+            </div>
+            <div class="step" id="bxS2">
+              <span class="n">۲</span><b>فایل کانفیگ را بساز</b>
+              <small>فایل <code>.conf</code> دانلود می‌شود و تا ۳۰ روز در حساب تو می‌ماند.</small>
+              <div class="row">
+                <button class="btn sm primary" data-act="beginnerBuild">ساخت و دانلود</button>
+              </div>
+            </div>
+            <div class="step" id="bxS3">
+              <span class="n">۳</span><b>در اپ WireGuard وصل شو</b>
+              <small>فایل را Import کن و تونل را روشن کن.</small>
+              <div class="row">
+                <a class="btn sm" href="/help.html#connect" target="_blank" rel="noopener">راهنمای اتصال</a>
+                <label class="check"><input type="checkbox" id="bxDone3" data-act-change="done3"/> وصل شدم</label>
+              </div>
+            </div>
+          </div>
+          <p class="hint" id="bxProg" style="margin-top:.8rem"></p>
+          <details class="adv-toggle" style="margin-top:.6rem">
+            <summary>این سایت دقیقاً برای چیست؟</summary>
+            <ul class="stack" style="padding-inline-start:1.2rem;margin-top:.5rem">
+              <li>ساخت فایل کانفیگ WireGuard برای بازی، در چند کلیک</li>
+              <li>پیدا کردن سرور با کمترین پینگ و مقایسه‌ی کشورها</li>
+              <li>ابزارهای کالاف: تنظیمات آماده، ماشین‌حساب TTK و ثبت مچ</li>
+              <li>نگهداری فایل کانفیگ تا ۳۰ روز و پشتیبانی آنلاین</li>
+            </ul>
+          </details>
+        </section>
+
+        <div class="grid-2" style="margin-top:1rem">
+          <div class="card">
+            <div class="card-h"><div><h2>حساب و سهمیه</h2><p id="homePlan">—</p></div></div>
+            <div class="kpis" style="grid-template-columns:repeat(2,minmax(0,1fr));margin:0">
+              <div class="kpi"><b id="homeUsed">—</b><span>ساخته‌شده در این دوره</span></div>
+              <div class="kpi"><b id="homeLeft">—</b><span>باقی‌مانده</span></div>
+            </div>
+            <div class="row" style="margin-top:.8rem">
+              <button class="btn" data-page="stats">سوابق من</button>
+              <button class="btn" data-page="support">پشتیبانی</button>
+            </div>
+          </div>
+          <div class="card">
+            <div class="card-h"><div><h2>وضعیت سرویس</h2><p>وضعیت لحظه‌ای سرورهای IMRC</p></div></div>
+            <div class="row"><span class="pill" id="homeStatus">در حال بررسی</span></div>
+            <p class="hint" style="margin-top:.6rem">اگر وصل نمی‌شی و وضعیت «قطع» بود، کمی صبر کن و دوباره امتحان کن.</p>
+          </div>
+        </div>
+
+        <div class="grid-2" style="margin-top:1rem">
+          <div class="card">
+            <div class="card-h"><div><h2>آخرین کانفیگ</h2><p>آخرین کانفیگی که روی این مرورگر ساختی</p></div></div>
+            <div id="homeLast" class="empty"><b>هنوز کانفیگی نساختی</b>از مرحله‌ی ۲ شروع کن.</div>
+          </div>
+          <div class="card">
+            <div class="card-h"><div><h2>اپ رسمی WireGuard</h2><p>کانفیگ‌های این پنل فرمت WireGuard دارند.</p></div></div>
+            <div class="row">
+              <a class="btn primary" href="https://play.google.com/store/apps/details?id=com.wireguard.android" target="_blank" rel="noopener">Google Play</a>
+              <a class="btn" href="https://www.wireguard.com/install/" target="_blank" rel="noopener">ویندوز / مک / آیفون</a>
+            </div>
+            <p class="hint" style="margin-top:.6rem">بسته‌ی اندروید: <code>com.wireguard.android</code></p>
+          </div>
+        </div>
+      </section>
+
+      <!-- ================= BUILD ================= -->
+      <section class="page" id="page-build" data-title="ساخت کانفیگ">
+        <div class="page-h">
+          <h1>ساخت کانفیگ</h1>
+          <p>سه مرحله: سرور را انتخاب کن، تنظیمات را تعیین کن و فایل را بساز. فایل <code>.conf</code> دانلود می‌شود.</p>
+        </div>
+        <div class="banner warn" id="pingWarn" hidden>پینگ این سرور بالاست؛ برای رنکد توصیه نمی‌شود. سرور دیگری از فهرست انتخاب کن.</div>
+
+        <div class="build-grid">
+          <!-- 1) servers -->
+          <section class="card" aria-labelledby="hServers">
+            <div class="card-h"><div><h2 id="hServers">۱. انتخاب سرور</h2><p>مرتب بر اساس پینگ پایه. دابل‌کلیک یا ستاره = علاقه‌مندی.</p></div></div>
+            <div class="search"><input class="input" id="srvSearch" type="search" placeholder="جستجوی کشور یا کد (مثلاً tr)" aria-label="جستجوی کشور"/></div>
+            <div class="row" style="margin:.6rem 0">
+              <button class="chip" id="favOnly" aria-pressed="false" data-act="favOnly">فقط ستاره‌دارها</button>
+              <span class="hint">پیشنهاد کالاف:</span>
+              <div class="row" id="recRow" style="gap:.3rem"></div>
+            </div>
+            <div class="list" id="srvList" role="listbox" aria-label="فهرست سرورها"></div>
+          </section>
+
+          <!-- 2) settings -->
+          <section class="card" aria-labelledby="hSettings">
+            <div class="card-h"><div><h2 id="hSettings">۲. تنظیمات</h2></div></div>
+            <div class="stack">
+              <div class="field">
+                <span class="label">حالت بازی</span>
+                <div class="seg" role="group" aria-label="حالت بازی">
+                  <button data-mode="ranked" aria-pressed="true">رنکد</button>
+                  <button data-mode="br" aria-pressed="false">بتل‌رویال</button>
+                  <button data-mode="mp" aria-pressed="false">مالتی‌پلیر</button>
+                </div>
+              </div>
+              <div class="field">
+                <span class="label">نقش</span>
+                <div class="lbl-grid" role="group" aria-label="نقش">
+                  <button class="chip" data-act="role" data-role="attacker" aria-pressed="true"><b>Attacker</b> تهاجمی</button>
+                  <button class="chip" data-act="role" data-role="defender" aria-pressed="false"><b>Defender</b> دفاعی</button>
+                  <button class="chip" data-act="role" data-role="support" aria-pressed="false"><b>Support</b> پشتیبانی</button>
+                </div>
+              </div>
+              <div class="field">
+                <label for="cfgName">نام فایل</label>
+                <div class="row">
+                  <input class="input" id="cfgName" maxlength="15" placeholder="مثلاً IMRC-ali" style="flex:1;min-width:150px" autocomplete="off"/>
+                  <button class="btn sm" data-act="autoName">ساخت خودکار</button>
+                </div>
+                <span class="hint">همیشه با IMRC شروع می‌شود؛ حداکثر ۱۵ کاراکتر.</span>
+              </div>
+              <div class="grid-2">
+                <div class="field">
+                  <label for="cfgUsers">تعداد کاربر (یادداشت شخصی)</label>
+                  <select class="input" id="cfgUsers"><option value="1" selected>۱ کاربر</option><option value="2">۲ کاربر</option><option value="3">۳ کاربر</option><option value="5">۵ کاربر</option><option value="10">۱۰ کاربر</option></select>
+                  <span class="hint">فقط در تاریخچه‌ی همین مرورگر ثبت می‌شود.</span>
+                </div>
+                <div class="field">
+                  <span class="label">پریست آماده</span>
+                  <div class="row" style="gap:.3rem">
+                    <button class="chip" data-act="preset" data-preset="ranked">رنکد حرفه‌ای</button>
+                    <button class="chip" data-act="preset" data-preset="br">بتل‌رویال</button>
+                    <button class="chip" data-act="preset" data-preset="lowping">کم‌پینگ</button>
+                    <button class="chip" data-act="preset" data-preset="tournament">تورنمنت</button>
+                  </div>
+                </div>
+              </div>
+              <details class="adv-toggle adv">
+                <summary>تنظیمات پیشرفته (DNS و MTU)</summary>
+                <div class="grid-2" style="margin-top:.7rem">
+                  <div class="field">
+                    <label for="dnsSel">DNS گیمینگ</label>
+                    <select class="input" id="dnsSel">
+                      <option value="10.202.10.10, 78.157.42.101">الکترو (پیشنهادی کالاف)</option>
+                      <option value="1.1.1.1, 1.0.0.1">Cloudflare</option>
+                      <option value="8.8.8.8, 8.8.4.4">Google</option>
+                      <option value="94.140.14.14, 94.140.15.15">AdGuard</option>
+                      <option value="9.9.9.9, 149.112.112.112">Quad9</option>
+                    </select>
+                    <label class="check"><input type="checkbox" id="useDns" checked/> DNS در فایل باشد</label>
+                  </div>
+                  <div class="field">
+                    <label for="mtuSel">MTU</label>
+                    <select class="input" id="mtuSel">
+                      <option value="1280">1280 (کم‌پینگ)</option><option value="1350">1350</option><option value="1400" selected>1400 (تعادل)</option><option value="1420">1420</option><option value="1450">1450</option>
+                    </select>
+                    <input class="input" id="mtuCustom" type="number" min="576" max="1500" inputmode="numeric" placeholder="MTU دلخواه (۵۷۶ تا ۱۵۰۰)" aria-label="MTU دلخواه"/>
+                    <label class="check"><input type="checkbox" id="useMtu" checked/> MTU در فایل باشد</label>
+                  </div>
+                </div>
+              </details>
+            </div>
+            <div class="row spread" style="margin-top:1.1rem">
+              <span class="hint" id="buildSummary"></span>
+              <div class="row">
+                <button class="btn" id="btnQuick" data-act="build">ساخت سریع</button>
+                <button class="btn primary" id="btnBuild" data-act="build">ساخت و دانلود</button>
+              </div>
+            </div>
+          </section>
+
+          <!-- 3) result -->
+          <section class="card" aria-labelledby="hResult" aria-live="polite">
+            <div class="card-h"><div><h2 id="hResult">۳. نتیجه</h2></div></div>
+            <div id="resIdle" class="result-idle">
+              <b>هنوز فایلی نساختی</b><br/>سرور و تنظیمات را انتخاب کن و «ساخت و دانلود» را بزن.
+            </div>
+            <div id="resLoading" hidden><div class="progress"><i></i></div><p class="hint" style="margin-top:.6rem">در حال ساخت کانفیگ…</p></div>
+            <div id="resBox" hidden class="stack">
+              <div class="row spread">
+                <span class="badge accent" id="resName">—</span>
+                <span class="badge" id="resWhen">—</span>
+              </div>
+              <div class="tags" id="resTags"></div>
+              <div class="est" aria-label="خلاصه‌ی تنظیمات">
+                <div><b id="estPing">—</b><span>پینگ پایه (تخمینی)</span></div>
+                <div><b id="estMtu">—</b><span>MTU در فایل</span></div>
+                <div><b id="estDns">—</b><span>DNS در فایل</span></div>
+              </div>
+              <p class="hint">پینگ بالا یک عدد تخمینی از فهرست سرورهاست، نه اندازه‌گیری زنده. برای سنجش واقعی از «ابزارهای کمکی» → تست پینگ استفاده کن.</p>
+              <p class="hint" id="resExpiry"></p>
+              <pre class="config-box" id="cfgText"></pre>
+              <div class="qr" id="qrBox"></div>
+              <div class="row">
+                <button class="btn sm" data-act="copyAll">کپی کل کانفیگ</button>
+                <button class="btn sm" data-act="copyKey">کپی PrivateKey</button>
+                <button class="btn sm" data-act="copyEp">کپی Endpoint</button>
+                <button class="btn sm" data-act="copySafe">کپی بی‌کلید (برای پشتیبانی)</button>
+              </div>
+              <div class="row">
+                <button class="btn sm" data-act="shareTg">تلگرام (بی‌کلید)</button>
+                <button class="btn sm" data-act="shareWa">واتساپ (بی‌کلید)</button>
+                <button class="btn sm" data-act="dlAgain">دانلود دوباره</button>
+                <button class="btn sm" data-act="shareLink">لینک این تنظیمات</button>
+                <button class="btn sm" data-act="summary">کپی خلاصه</button>
+                <button class="btn sm" data-act="checklist">چک‌لیست بعد از دانلود</button>
+              </div>
+              <div class="field">
+                <label for="noteText">یادداشت خصوصی</label>
+                <textarea class="input" id="noteText" rows="2" placeholder="مثلاً: برای گوشی اصلی"></textarea>
+                <div class="row">
+                  <input class="input" id="noteTags" placeholder="برچسب‌ها با کاما، مثلاً: رنکد، ترکیه" style="flex:1"/>
+                  <button class="btn sm" data-act="noteSave">ذخیره یادداشت</button>
+                </div>
+              </div>
+            </div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ================= CODM ================= -->
+      <section class="page" id="page-codm" data-title="ابزارهای کالاف">
+        <div class="page-h">
+          <h1>ابزارهای کالاف</h1>
+          <p>نقش، تنظیمات دستگاه، ماشین‌حساب TTK، ثبت مچ، تیم و لودات. همه‌ی این ابزارها روی همین مرورگر کار می‌کنند.</p>
+        </div>
+
+        <div class="grid-2">
+          <section class="card">
+            <div class="card-h"><div><h2>نقش و تنظیمات سریع</h2><p>نقش و MTU را این‌جا هم می‌توانی عوض کنی؛ با صفحه‌ی ساخت هماهنگ است.</p></div></div>
+            <div class="stack">
+              <div class="field">
+                <span class="label">نقش در تیم</span>
+                <div class="lbl-grid" aria-label="نقش در تیم">
+                  <button class="chip" data-act="role" data-role="attacker" aria-pressed="true"><b>Attacker</b> تهاجمی</button>
+                  <button class="chip" data-act="role" data-role="defender" aria-pressed="false"><b>Defender</b> دفاعی</button>
+                  <button class="chip" data-act="role" data-role="support" aria-pressed="false"><b>Support</b> پشتیبانی</button>
+                </div>
+              </div>
+              <div class="lbl-grid">
+                <button class="btn" data-act="mtu" data-mtu="1280">دستگاه ضعیف (MTU 1280)</button>
+                <button class="btn" data-act="mtu" data-mtu="1420">دستگاه پرچم‌دار (MTU 1420)</button>
+                <button class="btn" data-act="preset" data-preset="tournament">حالت تورنمنت</button>
+                <button class="btn primary" data-act="codmOpt">یک‌کلیک بهینه و ساخت</button>
+              </div>
+              <p class="hint">«یک‌کلیک بهینه»: رنکد، ترکیه، نقش تهاجمی، MTU ۱۲۸۰، DNS الکترو و ساخت فایل. قبلش مطمئن شو اینترنتت وصل است.</p>
+            </div>
+          </section>
+
+          <section class="card">
+            <div class="card-h"><div><h2>ساعت و فصل</h2><p>ساعت تهران و ساعت محلی، و روزهای باقی‌مانده تا پایان فصل.</p></div></div>
+            <div class="grid-2">
+              <div class="kpi"><span>تهران</span><b id="clkTehran" class="mono">--:--:--</b></div>
+              <div class="kpi"><span>ساعت محلی</span><b id="clkLocal" class="mono">--:--:--</b></div>
+            </div>
+            <div class="field" style="margin-top:.9rem">
+              <label for="seasonDate">تاریخ پایان فصل</label>
+              <input class="input" id="seasonDate" type="date" style="max-width:14rem"/>
+              <span class="hint" id="seasonLeft">تاریخ را وارد کن تا روزهای باقی‌مانده نشان داده شود.</span>
+            </div>
+          </section>
+        </div>
+
+        <div class="grid-2" style="margin-top:1rem">
+          <section class="card">
+            <div class="card-h"><div><h2>ماشین‌حساب TTK</h2><p>زمان کشتن هدف = (تعداد گلوله − ۱) × ۶۰۰۰۰ ÷ RPM میلی‌ثانیه</p></div></div>
+            <div class="grid-3">
+              <div class="field"><label for="ttkDmg">دمیج هر گلوله</label><input class="input" id="ttkDmg" type="number" min="1" inputmode="numeric"/></div>
+              <div class="field"><label for="ttkRpm">RPM سلاح</label><input class="input" id="ttkRpm" type="number" min="1" inputmode="numeric"/></div>
+              <div class="field"><label for="ttkHp">جان هدف</label><input class="input" id="ttkHp" type="number" min="1" value="100" inputmode="numeric"/></div>
+            </div>
+            <div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="ttk">محاسبه</button><span class="verdict" id="ttkOut" hidden></span></div>
+          </section>
+
+          <section class="card">
+            <div class="card-h"><div><h2>ثبت مچ</h2><p>کیل و دث این مچ را بزن، بعد نتیجه را ثبت کن.</p></div><button class="btn sm ghost" data-act="matchReset">پاک کردن تاریخچه</button></div>
+            <div class="grid-2">
+              <button class="btn" data-act="matchK">+ کیل</button>
+              <button class="btn" data-act="matchD">+ دث</button>
+              <button class="btn primary" data-act="matchWin">ثبت برد ✓</button>
+              <button class="btn" data-act="matchLose">ثبت باخت ✗</button>
+            </div>
+            <p class="tool-val" style="margin:.8rem 0 .3rem;font-size:1.2rem" id="matchCounts">این مچ: K 0 · D 0</p>
+            <div class="list" id="matchLog"></div>
+          </section>
+        </div>
+
+        <div class="grid-2" style="margin-top:1rem">
+          <section class="card">
+            <div class="card-h"><div><h2>تیم</h2><p>اسم هم‌تیمی‌ها؛ فقط روی همین مرورگر ذخیره می‌شود.</p></div></div>
+            <div class="grid-2" id="teamInputs"></div>
+          </section>
+          <section class="card">
+            <div class="card-h"><div><h2>لودات</h2><p>سلاح و پرک‌های خودت را این‌جا یادداشت کن.</p></div></div>
+            <div class="stack" id="loadoutInputs"></div>
+          </section>
+        </div>
+
+        <div class="grid-2" style="margin-top:1rem">
+          <section class="card">
+            <div class="card-h"><div><h2>تایمر عملیات</h2><p>یادآور زمان بازی یا تمرین.</p></div></div>
+            <div class="row spread">
+              <span class="tool-val" id="opT">00:00</span>
+              <div class="row">
+                <input class="input" id="opM" type="number" min="1" max="240" value="15" aria-label="دقیقه" style="max-width:6rem"/>
+                <button class="btn primary" data-act="opStart" id="opBtn">شروع</button>
+              </div>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-h"><div><h2>تمرین هدف‌گیری (۲۰ ثانیه)</h2><p>روی هدف‌ها کلیک کن؛ کلیک بیرون از هدف، خطا حساب می‌شود.</p></div></div>
+            <div class="row spread" style="margin-bottom:.6rem">
+              <button class="btn primary" data-act="aimStart" id="aimBtn">شروع</button>
+              <span class="hint" id="aimS">بهترین: ۰</span>
+            </div>
+            <div class="aim-field" id="aim" aria-label="میدان تمرین هدف‌گیری"></div>
+          </section>
+        </div>
+      </section>
+
+      <!-- ================= TOOLS ================= -->
+      <section class="page" id="page-tools" data-title="ابزارهای کمکی">
+        <div class="page-h">
+          <h1>ابزارهای کمکی</h1>
+          <p>تست پینگ، بررسی اتصال و کانفیگ، و ابزارهای کمکی برای آماده شدن قبل از مچ.</p>
+        </div>
+
+        <div class="grid-2">
+          <section class="card">
+            <div class="card-h"><div><h2>تست پینگ زنده</h2><p>۱۲ درخواست به سرویس‌های عمومی (Cloudflare و Google). این عدد تا حد زیادی نشان‌دهنده‌ی اتصال خودت است، نه سرور بازی.</p></div></div>
+            <div class="row"><button class="btn primary" data-act="pingRun" id="pingRun">شروع تست</button><span class="hint" id="pingState"></span></div>
+            <div class="grid-3" style="margin:.9rem 0">
+              <div class="kpi"><span>میانگین (ms)</span><b id="pingAvg">–</b></div>
+              <div class="kpi"><span>جیتر (ms)</span><b id="pingJit">–</b></div>
+              <div class="kpi"><span>افت (%)</span><b id="pingLoss">–</b></div>
+            </div>
+            <div class="bars" id="pingBars" aria-hidden="true"></div>
+            <div class="verdict" id="pingVerdict" hidden style="margin-top:.7rem"></div>
+          </section>
+
+          <section class="card">
+            <div class="card-h"><div><h2>اطلاعات اتصال</h2><p>آنچه مرورگر از شبکه‌ی تو می‌داند.</p></div><button class="btn sm" data-act="netRefresh">بروزرسانی</button></div>
+            <pre class="config-box" id="netInfo">—</pre>
+          </section>
+        </div>
+
+        <div class="grid-2" style="margin-top:1rem">
+          <section class="card">
+            <div class="card-h"><div><h2>بررسی کانفیگ WireGuard</h2><p>متن کانفیگ را بچسبان. بررسی فقط داخل مرورگر انجام می‌شود و چیزی به سرور فرستاده نمی‌شود.</p></div></div>
+            <textarea class="input mono" id="cfgIn" rows="6" placeholder="[Interface]&#10;PrivateKey = ..." aria-label="متن کانفیگ"></textarea>
+            <div class="row" style="margin-top:.6rem">
+              <button class="btn primary" data-act="cfgRun">بررسی</button>
+              <button class="btn" data-act="cfgFromLast">آخرین کانفیگ ساخته‌شده</button>
+            </div>
+            <ul class="check-list" id="cfgOut"></ul>
+          </section>
+
+          <section class="card">
+            <div class="card-h"><div><h2>پیشنهاد حساسیت</h2><p>نقطه‌ی شروع است؛ بعدش ۵٪ ۵٪ تنظیم کن.</p></div></div>
+            <div class="grid-2">
+              <div class="field"><label for="senDev">گوشی</label>
+                <select class="input" id="senDev"><option value="1">گوشی کوچک</option><option value="2" selected>گوشی بزرگ</option><option value="3">تبلت</option></select></div>
+              <div class="field"><label for="senStyle">سبک بازی</label>
+                <select class="input" id="senStyle"><option value="a">تهاجمی</option><option value="b" selected>متعادل</option><option value="c">اسنایپر</option></select></div>
+            </div>
+            <div class="row" style="margin-top:.7rem"><button class="btn" data-act="senRun">پیشنهاد بده</button></div>
+            <pre class="config-box" id="senOut" style="margin-top:.6rem" hidden></pre>
+          </section>
+        </div>
+
+        <div class="grid-2" style="margin-top:1rem">
+          <section class="card">
+            <div class="card-h"><div><h2>تست زمان واکنش</h2><p>وقتی جعبه سبز شد، سریع بزن.</p></div></div>
+            <button class="btn block" id="reactBox" data-act="react" style="min-height:96px;font-size:1.05rem">برای شروع بزن</button>
+            <p class="hint" id="reactOut" style="margin-top:.6rem"></p>
+          </section>
+
+          <section class="card">
+            <div class="card-h"><div><h2>چک‌لیست قبل از مچ</h2></div><button class="btn sm ghost" data-act="checkReset">پاک کردن</button></div>
+            <div class="list" id="checkList"></div>
+          </section>
+        </div>
+
+        <section class="card" style="margin-top:1rem">
+          <div class="card-h"><div><h2>یادداشت</h2><p>نکته‌های مچ، حساسیت‌ها و هر چیزی که می‌خواهی یادت بماند. روی همین مرورگر ذخیره می‌شود.</p></div></div>
+          <textarea class="input" id="notesText" rows="6" placeholder="لودات، حساسیت‌ها، نکته‌های مچ…" aria-label="یادداشت"></textarea>
+        </section>
+      </section>
+
+      <!-- ================= STATS ================= -->
+      <section class="page" id="page-stats" data-title="آمار و سوابق">
+        <div class="page-h">
+          <h1>آمار و سوابق</h1>
+          <p>آمار این مرورگر و فایل‌های کانفیگی که روی حساب تو ذخیره شده‌اند.</p>
+        </div>
+        <div class="kpis">
+          <div class="kpi"><b id="kpiCount">۰</b><span>کانفیگ ساخته‌شده</span></div>
+          <div class="kpi"><b id="kpiPing">–</b><span>میانگین پینگ پایه‌ی سرورها</span></div>
+          <div class="kpi"><b id="kpiTop">–</b><span>پرتکرارترین سرور</span></div>
+          <div class="kpi"><b id="kpiAch">۰</b><span>دستاورد</span></div>
+        </div>
+        <div class="grid-2">
+          <section class="card">
+            <div class="card-h"><div><h2>پینگ پایه‌ی ۷ کانفیگ اخیر</h2><p>هرچه کوتاه‌تر، بهتر.</p></div></div>
+            <div class="bars" id="pingChart" style="height:120px"></div>
+          </section>
+          <section class="card">
+            <div class="card-h"><div><h2>پرتکرارترین سرورها</h2></div></div>
+            <div id="countryChart" class="stack"></div>
+          </section>
+        </div>
+        <div class="grid-2" style="margin-top:1rem">
+          <section class="card">
+            <div class="card-h"><div><h2>دستاوردها</h2></div></div>
+            <div class="row" id="achList"></div>
+          </section>
+          <section class="card">
+            <div class="card-h"><div><h2>هدف پینگ</h2><p>هدف پینگ پایه‌ی سرورهایت را ثبت کن.</p></div></div>
+            <div class="row">
+              <input class="input" id="goalInput" type="number" min="10" max="300" placeholder="مثلاً ۶۰" style="max-width:10rem" aria-label="هدف پینگ"/>
+              <button class="btn" data-act="goalSave">ثبت هدف</button>
+            </div>
+            <p class="hint" id="goalStatus" style="margin-top:.6rem"></p>
+          </section>
+        </div>
+
+        <section class="card" style="margin-top:1rem">
+          <div class="card-h">
+            <div><h2>فایل‌های کانفیگ روی حساب من</h2><p>فایل کامل کانفیگ ۳۰ روز نگه داشته می‌شود و بعد حذف می‌شود.</p></div>
+            <button class="btn sm" data-act="srvRefresh">بروزرسانی</button>
+          </div>
+          <div class="list" id="srvHistList"><div class="empty">برای دیدن فایل‌ها «بروزرسانی» را بزن.</div></div>
+        </section>
+
+        <section class="card" style="margin-top:1rem">
+          <div class="card-h">
+            <div><h2>تاریخچه‌ی این مرورگر</h2><p>فقط روی همین دستگاه ذخیره می‌شود.</p></div>
+            <button class="btn sm" data-act="csv">خروجی CSV</button>
+          </div>
+          <div class="search" style="margin-bottom:.6rem"><input class="input" id="histSearch" type="search" placeholder="جستجو در تاریخچه" aria-label="جستجو در تاریخچه"/></div>
+          <div class="list" id="histList"></div>
+        </section>
+      </section>
+
+      <!-- ================= SUPPORT ================= -->
+      <section class="page" id="page-support" data-title="پشتیبانی آنلاین">
+        <div class="page-h">
+          <h1>پشتیبانی آنلاین</h1>
+          <p>سوالت را این‌جا بنویس. پاسخ تیم پشتیبانی همین‌جا و هم‌زمان در تلگرام به تو می‌رسد.</p>
+        </div>
+        <section class="card chat">
+          <div class="chat-log" id="chatLog" role="log" aria-live="polite" aria-label="گفتگو با پشتیبانی"></div>
+          <div class="composer">
+            <div style="flex:1;min-width:0">
+              <textarea class="input" id="chatIn" maxlength="1000" placeholder="پیامت را بنویس… (Enter ارسال، Shift+Enter خط جدید)" aria-label="متن پیام"></textarea>
+              <div class="row spread" style="margin-top:.3rem"><span class="hint" id="chatHint"></span><span class="counter" id="chatCount">۰ / ۱۰۰۰</span></div>
+            </div>
+            <button class="btn primary" id="chatSend" data-act="chatSend">ارسال</button>
+          </div>
+        </section>
+        <p class="hint" style="margin-top:.8rem">اگر جوابت در <a href="#/help" data-page="help">راهنما</a> هست، همان‌جا سریع‌تر پیدا می‌شود.</p>
+      </section>
+
+      <!-- ================= HELP ================= -->
+      <section class="page" id="page-help" data-title="راهنما">
+        <div class="page-h">
+          <h1>راهنما</h1>
+          <p>اگر تازه‌کاری، از اینجا شروع کن. هر بخش را جداگانه توضیح داده‌ایم.</p>
+        </div>
+
+        <div class="grid-2">
+          <section class="card">
+            <div class="card-h"><div><h2>سوالات متداول</h2></div></div>
+            <div class="search" style="margin-bottom:.4rem"><input class="input" id="faqSearch" type="search" placeholder="جستجو؛ مثلاً: وصل نمی‌شود" aria-label="جستجو در سوالات"/></div>
+            <div class="faq" id="faqList"></div>
+            <div class="empty" id="faqEmpty" hidden>موردی پیدا نشد. از «پشتیبانی آنلاین» بپرس.</div>
+          </section>
+          <section class="card">
+            <div class="card-h"><div><h2>عیب‌یاب گام‌به‌گام</h2><p>علامت مشکلت را انتخاب کن.</p></div></div>
+            <div class="lbl-grid" id="troubleBtns"></div>
+            <ol class="stack" id="troubleOut" style="padding-inline-start:1.2rem;margin-top:.8rem"></ol>
+          </section>
+        </div>
+
+        <div class="grid-2" style="margin-top:1rem">
+          <section class="card">
+            <div class="card-h"><div><h2>واژه‌نامه</h2></div></div>
+            <dl class="gloss" id="glossary"></dl>
+          </section>
+          <section class="card">
+            <div class="card-h"><div><h2>مقایسه‌ی دو کشور</h2><p>پینگ پایه و مناسب بودن برای کالاف.</p></div></div>
+            <div class="grid-2">
+              <select class="input" id="cmpA" aria-label="کشور اول"></select>
+              <select class="input" id="cmpB" aria-label="کشور دوم"></select>
+            </div>
+            <div id="cmpOut" style="margin-top:.8rem"></div>
+          </section>
+        </div>
+
+        <div class="grid-2" style="margin-top:1rem">
+          <section class="card" id="connect">
+            <div class="card-h"><div><h2>کانفیگ را چطور وصل کنم؟</h2></div></div>
+            <ol class="stack" style="padding-inline-start:1.2rem">
+              <li>فایل <code>.conf</code> را از «ساخت کانفیگ» دانلود کن.</li>
+              <li>اپ رسمی WireGuard را نصب کن (Google Play یا wireguard.com).</li>
+              <li>در اپ گزینه‌ی Import یا Add a tunnel را بزن و فایل را انتخاب کن.</li>
+              <li>تونل را روشن کن؛ بعد برای امتحان کالاف را باز کن.</li>
+            </ol>
+            <div class="row" style="margin-top:.8rem">
+              <button class="btn" data-act="printGuide">چاپ راهنمای سریع</button>
+              <button class="btn" data-page="tools">بررسی کانفیگ</button>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-h"><div><h2>درباره‌ی اعداد این پنل</h2></div></div>
+            <ul class="stack" style="padding-inline-start:1.2rem">
+              <li>پینگ‌های نمایش‌داده‌شده‌ی سرورها <b>تخمینی</b> و از فهرست هستند، نه اندازه‌گیری زنده.</li>
+              <li>اعداد تست پینگ در «ابزارهای کمکی» از اتصال همین دستگاه گرفته می‌شوند.</li>
+              <li>فایل کانفیگ شامل کلید خصوصی است؛ آن را با کسی به اشتراک نگذار.</li>
+            </ul>
+          </section>
+        </div>
+
+        <div id="printGuide" dir="rtl">
+          <h1>راهنمای سریع IMRC</h1>
+          <ol><li>سرور را انتخاب کن؛ کشوری با پینگ کمتر بهتر است.</li><li>فایل کانفیگ را بساز و دانلود کن.</li><li>اپ رسمی WireGuard را نصب کن، فایل را Import کن و تونل را روشن کن.</li></ol>
+          <h2>اگر وصل نشد</h2>
+          <ul><li>تونل را روشن کن و از جدیدترین فایل استفاده کن.</li><li>MTU و DNS را روی مقدار پیش‌فرض بگذار.</li><li>کشور دیگری را امتحان کن.</li><li>ساعت و تاریخ گوشی را خودکار کن.</li></ul>
+          <p>فایل کانفیگ شامل کلید خصوصی است؛ آن را با کسی به اشتراک نگذار.</p>
+        </div>
+      </section>
+
+      <!-- ================= SETTINGS ================= -->
+      <section class="page" id="page-settings" data-title="تنظیمات">
+        <div class="page-h">
+          <h1>تنظیمات</h1>
+          <p>ظاهر، نمایش، صدا و داده‌ها. تغییرها فوری ذخیره می‌شوند.</p>
+        </div>
+        <div class="grid-2">
+          <section class="card">
+            <div class="card-h"><div><h2>ظاهر</h2></div></div>
+            <div class="themes" id="themeList"></div>
+            <div class="row spread" style="margin-top:1rem">
+              <span class="label">اندازه‌ی متن</span>
+              <div class="row"><button class="btn sm" data-act="fontDec" aria-label="کوچک‌تر">A−</button><span id="fontLabel" class="badge">15px</span><button class="btn sm" data-act="fontInc" aria-label="بزرگ‌تر">A+</button></div>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-h"><div><h2>نمایش</h2><p>برای تازه‌کارها یا وقتی تمرکز می‌خواهی.</p></div></div>
+            <div class="stack">
+              <label class="check"><input type="checkbox" id="tgSimple" data-toggle="simple"/> حالت ساده (پنهان کردن تنظیمات پیشرفته)</label>
+              <label class="check"><input type="checkbox" id="tgHc" data-toggle="hc"/> کنتراست بالا</label>
+              <label class="check"><input type="checkbox" id="tgFocus" data-toggle="focus"/> حالت تمرکز (فقط محتوا)</label>
+              <label class="check"><input type="checkbox" id="tgGuide" data-toggle="guide"/> نمایش کارت «شروع اینجا» در خانه</label>
+            </div>
+          </section>
+        </div>
+        <div class="grid-2" style="margin-top:1rem">
+          <section class="card">
+            <div class="card-h"><div><h2>صدا و لرزش</h2></div></div>
+            <div class="stack">
+              <label class="check"><input type="checkbox" id="tgSound" data-toggle="sound"/> صدای کوتاه بعد از ساخت موفق</label>
+              <label class="check"><input type="checkbox" id="tgVibrate" data-toggle="vibrate"/> لرزش (روی موبایل)</label>
+              <div class="row"><button class="btn" data-act="push" id="btnPush" hidden>🔔 فعال‌سازی اعلان یادآوری</button></div>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-h"><div><h2>برنامه و زبان</h2></div></div>
+            <div class="row">
+              <button class="btn" data-act="install" id="btnInstall" hidden>📲 نصب روی گوشی</button>
+              <button class="btn" data-act="lang" id="btnLang">English</button>
+            </div>
+          </section>
+        </div>
+        <div class="grid-2" style="margin-top:1rem">
+          <section class="card">
+            <div class="card-h"><div><h2>داده‌های این مرورگر</h2><p>بکاپ شامل تاریخچه‌ی کانفیگ‌هاست؛ آن را امن نگه دار.</p></div></div>
+            <div class="row">
+              <button class="btn" data-act="backup">بکاپ</button>
+              <button class="btn" data-act="restore">بازگردانی</button>
+              <button class="btn danger" data-act="clearAll">پاک کردن همه‌ی داده‌ها</button>
+            </div>
+          </section>
+          <section class="card">
+            <div class="card-h"><div><h2>حساب</h2></div></div>
+            <p class="hint" style="margin-bottom:.7rem">خروج از همه‌ی دستگاه‌ها، نشست‌های دیگر را هم می‌بندد.</p>
+            <button class="btn danger" data-act="logoutAll">خروج از همه‌ی دستگاه‌ها</button>
+          </section>
+        </div>
+        <section class="card" style="margin-top:1rem">
+          <div class="card-h"><div><h2>میانبرهای کیبورد</h2></div></div>
+          <div class="lbl-grid">
+            <span><b>Ctrl + K</b> دسترسی سریع</span><span><b>Ctrl + Enter</b> ساخت کانفیگ</span>
+            <span><b>Esc</b> بستن پنجره</span><span><b>Enter</b> ارسال پیام پشتیبانی</span>
+          </div>
+        </section>
+      </section>
+    </main>
+  </div>
+</div>
+
+<!-- mobile bottom navigation -->
+<nav class="bottom-nav" aria-label="ناوبری سریع">
+  <button data-page="home"><span class="ico" aria-hidden="true">🏠</span>خانه</button>
+  <button data-page="build"><span class="ico" aria-hidden="true">⚡</span>ساخت</button>
+  <button data-page="codm"><span class="ico" aria-hidden="true">🎯</span>کالاف</button>
+  <button data-page="stats"><span class="ico" aria-hidden="true">📊</span>آمار</button>
+  <button data-page="support"><span class="ico" aria-hidden="true">💬</span>پشتیبانی<span class="count" data-chat-badge hidden>۰</span></button>
+  <button data-act="palette"><span class="ico" aria-hidden="true">☰</span>بیشتر</button>
+</nav>
+
+<!-- dialog (post-download checklist, suggestion) -->
+<div class="overlay" id="dlg" role="dialog" aria-modal="true" aria-labelledby="dlgTitle" aria-hidden="true">
+  <div class="dialog">
+    <div class="dialog-h"><b id="dlgTitle"></b><button class="icon-btn" data-act="close" aria-label="بستن">✕</button></div>
+    <div id="dlgBody"></div>
+  </div>
+</div>
+
+<!-- command palette -->
+<div class="overlay" id="cmdPalette" role="dialog" aria-modal="true" aria-label="دسترسی سریع" aria-hidden="true">
+  <div class="dialog" style="width:min(520px,100%)">
+    <input class="input" id="cmdInput" placeholder="دنبال چه می‌گردی؟ مثلاً: ساخت، تم، پشتیبانی" aria-label="جستجوی دستورها" autocomplete="off"/>
+    <div class="palette-list" id="cmdList" role="listbox"></div>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js" defer></script>
+<script src="/panel.js" defer></script>
+<script src="/i18n-en.js" defer></script>
+</body>
+</html>
