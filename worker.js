@@ -85,6 +85,15 @@ function getDB(env) {
           plan TEXT, amount INTEGER, code TEXT, status TEXT DEFAULT 'pending', decided INTEGER, decided_by TEXT)`),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_receipts_tg ON receipts(tg_id, status)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS pending_buy(tg_id TEXT PRIMARY KEY, plan TEXT, code TEXT, ts INTEGER)"),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS server_drafts(
+          tg_id TEXT PRIMARY KEY, token TEXT NOT NULL, product TEXT NOT NULL, stage TEXT NOT NULL,
+          volume INTEGER, days INTEGER, users INTEGER, amount INTEGER, created INTEGER NOT NULL)`),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS server_orders(
+          id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id TEXT NOT NULL, product TEXT NOT NULL,
+          volume INTEGER, days INTEGER NOT NULL, users INTEGER, amount INTEGER NOT NULL,
+          file_id TEXT NOT NULL, status TEXT NOT NULL, created INTEGER NOT NULL,
+          admin_msg_id INTEGER, decided INTEGER, decided_by TEXT)`),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_server_orders_admin_msg ON server_orders(admin_msg_id)"),
         env.DB.prepare(`CREATE TABLE IF NOT EXISTS discount_codes(
           code TEXT PRIMARY KEY, percent INTEGER, max_uses INTEGER DEFAULT 0, used INTEGER DEFAULT 0,
           expires INTEGER, active INTEGER DEFAULT 1, created INTEGER)`),
@@ -314,7 +323,7 @@ async function tgWebhook(request, env) {
   if (msg.chat.type !== "private") return new Response("ok");
   await touchUser(env, db, msg.from).catch(() => {});
   try {
-    if (msg.photo) await handleReceipt(env, db, msg);
+    if (msg.photo) { if (!(await serverReceipt(env, db, msg))) await handleReceipt(env, db, msg); }
     else await handleText(env, db, msg, String(msg.text || "").trim(), origin);
   } catch (e) { console.error("message", e); }
   return new Response("ok");
@@ -342,9 +351,9 @@ const UNKNOWN_CMD = "این دستور رو نمی‌شناسم. برای نما
 async function sendMainMenu(env, db, chatId, isAdminUser, text) {
   const panelUrl = (env.PUBLIC_URL || PANEL_URL).replace(/\/$/, "");
   const keyboard = [
-    [{ text: "🌐 ورود به پنل", url: panelUrl }],
+    [{ text: "🖥 خرید سرور", callback_data: "menu:server" }],
     [{ text: "⚡ ساخت کانفیگ رایگان", callback_data: "menu:config" }, { text: "💳 خرید اشتراک VIP", callback_data: "menu:plans" }],
-    [{ text: "🖥 خرید سرور", callback_data: "menu:server" }, { text: "💼 کیف پول و شارژ", callback_data: "menu:wallet" }],
+    [{ text: "🌐 ورود به پنل", url: panelUrl }, { text: "💼 کیف پول و شارژ", callback_data: "menu:wallet" }],
     [{ text: "👤 حساب من", callback_data: "menu:me" }, { text: "📂 کانفیگ‌های من", callback_data: "menu:configs" }],
     [{ text: "🎁 دعوت دوستان", callback_data: "menu:invite" }, { text: "🎫 پشتیبانی", callback_data: "menu:support" }],
     [{ text: "🎟 کد تخفیف", callback_data: "menu:code" }],
@@ -636,8 +645,11 @@ async function sendStoredConfig(env, db, cq, id, chatId, answer) {
 async function handleText(env, db, msg, text, origin) {
   const chatId = msg.chat.id, from = msg.from, tgId = String(from.id);
   const reply = (t, extra = {}) => tg(env, "sendMessage", { chat_id: chatId, text: t, ...extra }).catch(() => {});
+  if (isAdmin(env, from.id) && msg.reply_to_message && text && await serverDelivery(env, db, msg, text)) return;
+  if (text && !text.startsWith("/") && !KB_TEXTS.has(text) && await serverInput(env, db, msg, text)) return;
   // فرم ساخت کانفیگ: اگه منتظر اسم باشیم و پیام عادی باشه، همون پیام اسمه؛ دستور یا دکمه یعنی فرم رو ول کرده
   if (text.startsWith("/") || KB_TEXTS.has(text)) {
+    await db.prepare("DELETE FROM server_drafts WHERE tg_id=? AND stage IN ('volume','days','users')").bind(tgId).run();
     await db.prepare("UPDATE bot_state SET awaiting='' WHERE tg_id=? AND awaiting!=''").bind(tgId).run().catch(() => {});
   } else if (text) {
     const cst = await cfgLoad(db, tgId).catch(() => null);
@@ -731,7 +743,14 @@ async function handleCallback(env, db, cq, origin) {
     await answer();
     return verifyLogin(env, db, chk[1], cq.from, cq.from.id);
   }
+  const serverSelect = data.match(/^sv:([a-z]+)$/);
+  if (serverSelect) { await answer(); return serverChoose(env, db, chatId, String(cq.from.id), serverSelect[1]); }
+  const serverUsers = data.match(/^su:([a-f0-9]{16}):([123])$/);
+  if (serverUsers) { await answer(); return serverChooseUsers(env, db, chatId, String(cq.from.id), serverUsers[1], Number(serverUsers[2])); }
+  const serverDecision = data.match(/^sd:([ar]):(\d{1,12})$/);
+  if (serverDecision) return serverDecide(env, db, cq, Number(serverDecision[2]), serverDecision[1], answer);
   if (data.startsWith("menu:")) {
+    await db.prepare("DELETE FROM server_drafts WHERE tg_id=? AND stage IN ('volume','days','users')").bind(String(cq.from.id)).run();
     await db.prepare("UPDATE bot_state SET awaiting='' WHERE tg_id=? AND awaiting!=''").bind(String(cq.from.id)).run().catch(() => {});
   }
   if (data === "menu:server") { await answer(); return sendServerShop(env, chatId); }
@@ -982,56 +1001,139 @@ async function sendInvite(env, db, chatId, tgId) {
   }).catch(() => {});
 }
 
-// ===== خرید سرور: فهرست محصولات =====
-// متن فهرست در یک تابع جمع شده تا قیمت‌ها با fa() (اعداد فارسی) نوشته بشن
-function serverShopText() {
-  return `🛒 خرید سرور
-
-💎 سرور مولتی‌لوکیشن | فول‌تانل
-🌍 اتصال به سرورهای چند کشور
-🌐 مناسب وب‌گردی و استفاده روزمره و سرویس‌های هوش مصنوعی
-🚫 امکان حذف تبلیغات یوتیوب
-⚡ سریع و باکیفیت
-👤 بدون محدودیت کاربر
-💰 قیمت هر گیگ: ${fa(15000)} تومان
-
-━━━━━━━━━━━━━━━━
-
-🥇 سرور اختصاصی WIREGUARD
-🌍 دو لوکیشن: 🇹🇷 ترکیه و 🇩🇪 آلمان
-⚡ سریع و روی دستگاه‌های مختلف قابل استفاده
-🎮 مناسب گیمینگ و استفاده روزمره
-👤 بدون محدودیت کاربر
-💰 قیمت هر گیگ: ${fa(20000)} تومان
-
-━━━━━━━━━━━━━━━━
-
-🎮 OPENVPN | GAMING EDITION 🥇
-🌍 دو لوکیشن: 🇹🇷 ترکیه و 🇩🇪 آلمان
-⚡ سرور اختصاصی گیمینگ با OpenVPN
-📶 پینگ پایین و ریجستری بالا
-👤 بدون محدودیت کاربر
-💰 قیمت هر گیگ: ${fa(30000)} تومان
-
-━━━━━━━━━━━━━━━━
-
-🔮 نامحدود چندسروره ویژه
-🌍 چند سرور در لوکیشن‌های مختلف
-♾️ ترافیک نامحدود
-🌐 مناسب وب‌گردی، دانلود، سرویس‌های آنلاین و هوش مصنوعی
-📅 تعرفه‌ی ۳۰ روزه:
-👤 تک‌کاربره: ${fa(175000)} تومان
-👥 دوکاربره: ${fa(287000)} تومان
-👥 سه‌کاربره: ${fa(385000)} تومان
-
-برای خرید سرور با پشتیبانی هماهنگ کن. برای شارژ کیف پول از دکمه‌ی زیر یا /wallet استفاده کن.`;
+// سفارش سرور: قیمت‌های فعلی فروشگاه به تومان، مستقل از تعداد روز.
+const SERVER_PRODUCTS = {
+  multi: { name: "مولتی‌لوکیشن فول‌تانل", price: 15000 },
+  wire: { name: "اختصاصی WireGuard", price: 20000 },
+  open: { name: "OpenVPN Gaming", price: 30000 },
+  unlimited: { name: "نامحدود چندسروره", prices: [175000, 287000, 385000] },
+};
+const SERVER_DRAFT_MS = 86400000;
+async function cancelServerDraft(db, tgId) {
+  await db.prepare("DELETE FROM server_drafts WHERE tg_id=?").bind(String(tgId)).run();
 }
 async function sendServerShop(env, chatId) {
   return tg(env, "sendMessage", {
-    chat_id: chatId,
-    text: serverShopText(),
-    reply_markup: { inline_keyboard: [[{ text: "🎫 سفارش از پشتیبانی", callback_data: "menu:support" }], [{ text: "💼 کیف پول و شارژ", callback_data: "menu:wallet" }]] },
+    chat_id: chatId, text: "🛒 کدام سرور را می‌خواهید خریداری کنید؟",
+    reply_markup: { inline_keyboard: Object.entries(SERVER_PRODUCTS).map(([key, p]) => [{ text: p.name, callback_data: "sv:" + key }]) },
   }).catch(() => {});
+}
+async function serverChoose(env, db, chatId, tgId, key) {
+  const product = SERVER_PRODUCTS[key];
+  if (!product) return;
+  if (await isBanned(db, tgId)) return tg(env, "sendMessage", { chat_id: chatId, text: "⛔ دسترسی شما مسدود است." });
+  const token = randHex(8);
+  await db.batch([
+    db.prepare("DELETE FROM pending_buy WHERE tg_id=?").bind(tgId),
+    db.prepare("UPDATE bot_state SET awaiting='' WHERE tg_id=?").bind(tgId),
+    db.prepare("INSERT INTO server_drafts(tg_id,token,product,stage,created) VALUES(?,?,?,?,?) ON CONFLICT(tg_id) DO UPDATE SET token=excluded.token,product=excluded.product,stage=excluded.stage,volume=NULL,days=NULL,users=NULL,amount=NULL,created=excluded.created")
+      .bind(tgId, token, key, key === "unlimited" ? "users" : "volume", Date.now()),
+  ]);
+  if (key === "unlimited") return tg(env, "sendMessage", {
+    chat_id: chatId, text: "♾️ نامحدود چندسروره، ۳۰ روزه\nتعداد کاربران را انتخاب کنید:",
+    reply_markup: { inline_keyboard: product.prices.map((price, i) => [{ text: `${fa(i + 1)} کاربر — ${fa(price)} تومان`, callback_data: `su:${token}:${i + 1}` }]) },
+  });
+  return tg(env, "sendMessage", { chat_id: chatId, text: `📦 ${product.name}\n💰 هر گیگ: ${fa(product.price)} تومان\n\nحجم دلخواه را به گیگابایت به صورت عدد صحیح بین ۱ تا ۱۰۰۰ بفرستید.` });
+}
+async function serverChooseUsers(env, db, chatId, tgId, token, users) {
+  const d = await db.prepare("SELECT * FROM server_drafts WHERE tg_id=? AND token=? AND stage='users' AND created>?").bind(tgId, token, Date.now() - SERVER_DRAFT_MS).first();
+  if (!d || d.product !== "unlimited" || !SERVER_PRODUCTS.unlimited.prices[users - 1]) return tg(env, "sendMessage", { chat_id: chatId, text: "این انتخاب منقضی شده؛ دوباره خرید سرور را شروع کنید." });
+  const result = await db.prepare("UPDATE server_drafts SET users=?,days=30,amount=?,stage='receipt' WHERE tg_id=? AND token=? AND stage='users'").bind(users, SERVER_PRODUCTS.unlimited.prices[users - 1], tgId, token).run();
+  if (result.meta.changes) return serverInvoice(env, db, chatId, tgId, token);
+}
+function serverInteger(text) {
+  const normalized = text.trim().replace(/[۰-۹]/g, c => String(c.charCodeAt(0) - 1776)).replace(/[٠-٩]/g, c => String(c.charCodeAt(0) - 1632));
+  return /^\d{1,4}$/.test(normalized) ? Number(normalized) : NaN;
+}
+async function serverInput(env, db, msg, text) {
+  const tgId = String(msg.from.id), chatId = msg.chat.id;
+  const d = await db.prepare("SELECT * FROM server_drafts WHERE tg_id=? AND created>? AND stage IN ('volume','days')").bind(tgId, Date.now() - SERVER_DRAFT_MS).first();
+  if (!d) return false;
+  const n = serverInteger(text), max = d.stage === "volume" ? 1000 : 30;
+  if (!Number.isInteger(n) || n < 1 || n > max) {
+    await tg(env, "sendMessage", { chat_id: chatId, text: `⚠️ لطفاً یک عدد صحیح بین ۱ و ${fa(max)} بفرستید؛ برای خروج /start را بزنید.` });
+    return true;
+  }
+  if (d.stage === "volume") {
+    const result = await db.prepare("UPDATE server_drafts SET volume=?,stage='days' WHERE tg_id=? AND token=? AND stage='volume'").bind(n, tgId, d.token).run();
+    if (result.meta.changes) await tg(env, "sendMessage", { chat_id: chatId, text: "📅 مدت سرویس را به روز، از ۱ تا ۳۰، به صورت عدد بفرستید. مدت روی قیمت تأثیر ندارد." });
+  } else {
+    const product = SERVER_PRODUCTS[d.product];
+    if (!product || !product.price || !d.volume) { await cancelServerDraft(db, tgId); return true; }
+    const result = await db.prepare("UPDATE server_drafts SET days=?,amount=?,stage='receipt' WHERE tg_id=? AND token=? AND stage='days'").bind(n, d.volume * product.price, tgId, d.token).run();
+    if (result.meta.changes) await serverInvoice(env, db, chatId, tgId, d.token);
+  }
+  return true;
+}
+function serverDetails(d) {
+  const product = SERVER_PRODUCTS[d.product];
+  if (!product) return "سرویس نامشخص";
+  return `📦 سرویس: ${product.name}\n${d.product === "unlimited" ? `👥 تعداد کاربر: ${fa(d.users)}\n♾️ حجم: نامحدود` : `📊 حجم: ${fa(d.volume)} گیگابایت\n💵 قیمت هر گیگ: ${fa(d.amount / d.volume)} تومان`}\n📅 مدت: ${fa(d.days)} روز\n💰 مبلغ نهایی: ${fa(d.amount)} تومان`;
+}
+async function serverInvoice(env, db, chatId, tgId, token) {
+  const d = await db.prepare("SELECT * FROM server_drafts WHERE tg_id=? AND token=? AND stage='receipt'").bind(tgId, token).first();
+  if (!d) return;
+  const st = await getSettings(db);
+  return tg(env, "sendMessage", { chat_id: chatId, text: `🧾 صورت‌حساب سفارش سرور\n━━━━━━━━━━━━━━━━\n${serverDetails(d)}\n━━━━━━━━━━━━━━━━\n\n${st.pay_text}\n\nپس از پرداخت، عکس رسید را همین‌جا ارسال کنید. پس از تأیید، پشتیبانی سرویس را دستی تحویل می‌دهد.` });
+}
+async function serverReceipt(env, db, msg) {
+  const tgId = String(msg.from.id), chatId = msg.chat.id;
+  const d = await db.prepare("SELECT * FROM server_drafts WHERE tg_id=?").bind(tgId).first();
+  if (!d) return false;
+  const reply = text => tg(env, "sendMessage", { chat_id: chatId, text }).catch(() => {});
+  if (d.created <= Date.now() - SERVER_DRAFT_MS) {
+    await cancelServerDraft(db, tgId);
+    await reply("⚠️ سفارش سرور منقضی شده است؛ لطفاً دوباره خرید سرور را شروع کنید.");
+    return true;
+  }
+  if (d.stage !== "receipt") { await reply("ابتدا انتخاب سرور، حجم و مدت را کامل کنید."); return true; }
+  if (!env.ADMIN_TG_ID) { await reply("⚠️ پشتیبانی تنظیم نشده؛ رسید ارسال نشد."); return true; }
+  if (await isBanned(db, tgId)) { await reply("⛔ دسترسی شما مسدود است."); return true; }
+  const lock = await db.prepare("UPDATE server_drafts SET stage='sending' WHERE tg_id=? AND token=? AND stage='receipt'").bind(tgId, d.token).run();
+  if (!lock.meta.changes) { await reply("رسید در حال بررسی است؛ دوباره ارسال نکنید."); return true; }
+  const photo = msg.photo[msg.photo.length - 1];
+  let id;
+  try {
+    const ins = await db.prepare("INSERT INTO server_orders(tg_id,product,volume,days,users,amount,file_id,status,created) VALUES(?,?,?,?,?,?,?,'sending',?)")
+      .bind(tgId, d.product, d.volume, d.days, d.users, d.amount, photo.file_id, Date.now()).run();
+    id = ins.meta.last_row_id;
+    const name = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(" ").slice(0, 100);
+    const caption = `🧾 صورت‌حساب سفارش سرور #${id}\n━━━━━━━━━━━━━━━━\n👤 مشتری: ${name || "—"}${msg.from.username ? " (@" + msg.from.username + ")" : ""}\n🆔 شناسه تلگرام: ${tgId}\n${serverDetails(d)}\n━━━━━━━━━━━━━━━━\nرسید را بررسی کنید. پس از تأیید، برای تحویل دستی روی همین پیام Reply کنید و اطلاعات سرویس را بفرستید.`;
+    const sent = await tg(env, "sendPhoto", { chat_id: adminTgId(env), photo: photo.file_id, caption, reply_markup: { inline_keyboard: [[{ text: "✅ تأیید پرداخت", callback_data: `sd:a:${id}` }, { text: "❌ رد رسید", callback_data: `sd:r:${id}` }]] } });
+    if (!sent.ok || !sent.result || !sent.result.message_id) throw new Error("invoice send failed");
+    await db.prepare("UPDATE server_orders SET status='pending',admin_msg_id=? WHERE id=? AND status='sending'").bind(sent.result.message_id, id).run();
+    await db.prepare("DELETE FROM server_drafts WHERE tg_id=? AND token=? AND stage='sending'").bind(tgId, d.token).run();
+    await reply(`✅ رسید سفارش #${id} ثبت شد. پس از بررسی، پشتیبانی نتیجه و اطلاعات سرویس را ارسال می‌کند.`);
+  } catch (e) {
+    console.error("server receipt", e);
+    if (id) await db.prepare("DELETE FROM server_orders WHERE id=? AND status='sending'").bind(id).run();
+    await db.prepare("UPDATE server_drafts SET stage='receipt' WHERE tg_id=? AND token=? AND stage='sending'").bind(tgId, d.token).run();
+    await reply("⚠️ ثبت رسید انجام نشد. لطفاً دوباره عکس رسید را بفرستید.");
+  }
+  return true;
+}
+async function serverDecide(env, db, cq, id, action, answer) {
+  if (!isAdmin(env, cq.from.id)) return answer("⛔ فقط ادمین");
+  const order = await db.prepare("SELECT * FROM server_orders WHERE id=?").bind(id).first();
+  if (!order || order.status !== "pending") return answer("سفارش پیدا نشد یا قبلاً بررسی شده است.");
+  const status = action === "a" ? "approved" : "rejected";
+  const res = await db.prepare("UPDATE server_orders SET status=?,decided=?,decided_by=? WHERE id=? AND status='pending'").bind(status, Date.now(), String(cq.from.id), id).run();
+  if (!res.meta.changes) return answer("قبلاً بررسی شده است.");
+  await tg(env, "sendMessage", { chat_id: order.tg_id, text: action === "a" ? `✅ پرداخت سفارش سرور #${id} تأیید شد. پشتیبانی اطلاعات سرویس را برای شما ارسال می‌کند.` : `❌ رسید سفارش سرور #${id} تأیید نشد. برای پیگیری با پشتیبانی در ارتباط باشید.` }).catch(() => {});
+  await stampReceipt(env, cq, action === "a" ? "✅ پرداخت تأیید شد؛ برای تحویل روی همین پیام Reply کنید." : "❌ رسید رد شد.");
+  return answer(action === "a" ? "تأیید شد؛ سرویس را دستی تحویل دهید." : "رد شد.");
+}
+async function serverDelivery(env, db, msg, text) {
+  const id = msg.reply_to_message.message_id;
+  const order = await db.prepare("SELECT * FROM server_orders WHERE admin_msg_id=?").bind(id).first();
+  if (!order) return false;
+  const reply = t => tg(env, "sendMessage", { chat_id: msg.chat.id, text: t }).catch(() => {});
+  if (order.status !== "approved") { await reply("⚠️ فقط بعد از تأیید پرداخت، امکان تحویل با پاسخ به این پیام وجود دارد."); return true; }
+  const sent = await tg(env, "sendMessage", { chat_id: order.tg_id, text: `📦 اطلاعات سرویس سفارش #${order.id}:\n\n${text}` }).catch(() => ({ ok: false }));
+  if (!sent.ok) { await reply("⚠️ ارسال اطلاعات سرویس به مشتری ناموفق بود؛ دوباره تلاش کنید."); return true; }
+  await db.prepare("UPDATE server_orders SET status='delivered' WHERE id=? AND status='approved'").bind(order.id).run();
+  await reply(`✅ اطلاعات سفارش #${order.id} برای مشتری ارسال شد.`);
+  return true;
 }
 
 // ===== کیف پول: شارژ با رسید (همون مسیر رسید پلن‌ها + تأیید ادمین) =====
@@ -1052,6 +1154,7 @@ async function sendWallet(env, db, chatId, tgId, raw) {
 }
 async function startTopup(env, db, chatId, tgId, amount) {
   const reply = (t) => tg(env, "sendMessage", { chat_id: chatId, text: t }).catch(() => {});
+  await cancelServerDraft(db, tgId);
   if (!(amount >= TOPUP_MIN && amount <= TOPUP_MAX)) return reply(`⚠️ مبلغ شارژ باید بین ${fa(TOPUP_MIN)} و ${fa(TOPUP_MAX)} تومان باشه.`);
   await db.prepare("INSERT INTO pending_buy(tg_id,plan,code,ts,topup) VALUES(?,NULL,NULL,?,?) ON CONFLICT(tg_id) DO UPDATE SET plan=NULL, code=NULL, topup=excluded.topup, ts=excluded.ts, use_wallet=0")
     .bind(tgId, Date.now(), amount).run();
@@ -1084,6 +1187,7 @@ async function pendingCode(db, tgId) {
 }
 
 async function choosePlan(env, db, chatId, tgId, key) {
+  await cancelServerDraft(db, tgId);
   const reply = (t) => tg(env, "sendMessage", { chat_id: chatId, text: t }).catch(() => {});
   const st = await getSettings(db);
   const plan = st.plans.find((p) => p.key === key);
