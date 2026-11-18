@@ -8,6 +8,7 @@ function setup() {
   const sql = new DatabaseSync(':memory:');
   sql.exec(`CREATE TABLE server_drafts(tg_id TEXT PRIMARY KEY, token TEXT, product TEXT, stage TEXT, volume INTEGER, days INTEGER, users INTEGER, amount INTEGER, created INTEGER);
     CREATE TABLE server_orders(id INTEGER PRIMARY KEY AUTOINCREMENT,tg_id TEXT,product TEXT,volume INTEGER,days INTEGER,users INTEGER,amount INTEGER,file_id TEXT,status TEXT,created INTEGER,admin_msg_id INTEGER,decided INTEGER,decided_by TEXT);
+    CREATE TABLE server_deliveries(order_id INTEGER,source_chat TEXT,source_message INTEGER,created INTEGER, PRIMARY KEY(source_chat,source_message));
     CREATE TABLE pending_buy(tg_id TEXT PRIMARY KEY); CREATE TABLE bot_state(tg_id TEXT PRIMARY KEY, awaiting TEXT);`);
   const db = { prepare(query) { let values = []; return { bind(...v) { values = v; return this; }, async run() { const r = sql.prepare(query).run(...values); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }, async first() { return sql.prepare(query).get(...values) || null; } }; }, async batch(stmts) { for (const stmt of stmts) await stmt.run(); } };
   const calls = [];
@@ -29,14 +30,22 @@ test('volume order computes unit price times volume, independent of 1-30 days, a
   await ctx.serverReceipt(env, db, msg);
   const order = sql.prepare('SELECT * FROM server_orders').get();
   assert.equal(order.amount, 400000); assert.equal(order.days, 15); assert.equal(order.status, 'pending');
-  const adminMsg = { chat: { id: 99 }, from: { id: 99 }, reply_to_message: { message_id: 55 } };
-  await ctx.serverDelivery(env, db, adminMsg, 'secret');
-  assert(!calls.some(c => c.payload.text && c.payload.text.includes('secret')));
-  const cq = { from: { id: 99 }, message: { chat: { id: 99 } } };
+  const adminMsg = { chat: { id: 99 }, from: { id: 99 }, message_id: 100, document: { file_id: 'config' }, reply_to_message: { message_id: 55 } };
+  await ctx.serverDelivery(env, db, adminMsg);
+  assert(!calls.some(c => c.method === 'copyMessage'));
+  const cq = { from: { id: 99 }, message: { chat: { id: 99 }, message_id: 55, caption: 'invoice' } };
   await ctx.serverDecide(env, db, cq, order.id, 'a', async () => {});
-  await ctx.serverDelivery(env, db, adminMsg, 'secret');
+  assert(calls.some(c => c.method === 'editMessageCaption' && c.payload.reply_markup.inline_keyboard[0][0].callback_data === 'sd:d:1'));
+  await ctx.serverDelivery(env, db, adminMsg);
+  await ctx.serverDelivery(env, db, { ...adminMsg, message_id: 101, document: undefined, text: 'secret' });
+  assert.equal(sql.prepare('SELECT status FROM server_orders').get().status, 'approved');
+  assert.equal(calls.filter(c => c.method === 'copyMessage').length, 2);
+  assert(calls.some(c => c.method === 'copyMessage' && c.payload.chat_id === '7' && c.payload.message_id === 100));
+  await ctx.serverDecide(env, db, cq, order.id, 'd', async () => {});
   assert.equal(sql.prepare('SELECT status FROM server_orders').get().status, 'delivered');
-  assert(calls.some(c => c.payload.chat_id === '7' && c.payload.text?.includes('secret')));
+  assert(calls.some(c => c.payload.chat_id === '7' && c.payload.text?.includes('تحویل داده شد')));
+  await ctx.serverDecide(env, db, cq, order.id, 'd', async () => {});
+  assert.equal(calls.filter(c => c.payload.chat_id === '7' && c.payload.text?.includes('تحویل داده شد')).length, 1);
 });
 test('unlimited has fixed 30-day tier prices and stale buttons are rejected', async () => {
   const { ctx, sql, env, db } = setup();
@@ -57,4 +66,18 @@ test('failed receipt notification is recoverable and unauthorized approval is re
   setFail(false); await ctx.serverReceipt(env, db, msg);
   await ctx.serverDecide(env, db, { from: { id: 4 } }, 1, 'a', async () => {});
   assert.equal(sql.prepare('SELECT status FROM server_orders').get().status, 'pending');
+});
+test('closing requires successful delivery and unauthorized replies cannot send files', async () => {
+  const { ctx, sql, env, db, msg, calls } = setup();
+  await ctx.serverChoose(env, db, 7, '7', 'multi');
+  await ctx.serverInput(env, db, msg, '2'); await ctx.serverInput(env, db, msg, '3'); await ctx.serverReceipt(env, db, msg);
+  const cq = { from: { id: 99 }, message: { chat: { id: 99 }, message_id: 55 } };
+  await ctx.serverDecide(env, db, cq, 1, 'a', async () => {});
+  let reason = '';
+  await ctx.serverDecide(env, db, cq, 1, 'd', async text => { reason = text; });
+  assert.match(reason, /ابتدا/);
+  assert.equal(sql.prepare('SELECT status FROM server_orders').get().status, 'approved');
+  const result = await ctx.serverDelivery(env, db, { chat: { id: 7 }, from: { id: 7 }, message_id: 9, document: {}, reply_to_message: { message_id: 55 } });
+  assert.equal(result, false);
+  assert(!calls.some(c => c.method === 'copyMessage'));
 });
