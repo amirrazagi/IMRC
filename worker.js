@@ -1006,10 +1006,22 @@ async function sendInvite(env, db, chatId, tgId) {
 
 // سفارش سرور: قیمت‌های فعلی فروشگاه به تومان، مستقل از تعداد روز.
 const SERVER_PRODUCTS = {
-  multi: { name: "مولتی‌لوکیشن فول‌تانل", price: 15000 },
-  wire: { name: "اختصاصی WireGuard", price: 20000 },
-  open: { name: "OpenVPN Gaming", price: 30000 },
-  unlimited: { name: "نامحدود چندسروره", prices: [175000, 287000, 385000] },
+  multi: {
+    name: "مولتی‌لوکیشن فول‌تانل", price: 15000,
+    description: "🌍 اتصال به سرورهای چند کشور\n🌐 مناسب وب‌گردی، استفاده روزمره و سرویس‌های هوش مصنوعی\n🚫 امکان حذف تبلیغات یوتیوب\n⚡ سریع و باکیفیت\n👤 بدون محدودیت کاربر",
+  },
+  wire: {
+    name: "اختصاصی WireGuard", price: 20000,
+    description: "🌍 دو لوکیشن: 🇹🇷 ترکیه و 🇩🇪 آلمان\n⚡ سریع و قابل استفاده روی دستگاه‌های مختلف\n🎮 مناسب گیمینگ و استفاده روزمره\n👤 بدون محدودیت کاربر",
+  },
+  open: {
+    name: "OpenVPN Gaming", price: 30000,
+    description: "🌍 دو لوکیشن: 🇹🇷 ترکیه و 🇩🇪 آلمان\n⚡ سرور اختصاصی گیمینگ با OpenVPN\n📶 پینگ پایین و ریجستری بالا\n👤 بدون محدودیت کاربر",
+  },
+  unlimited: {
+    name: "نامحدود چندسروره", prices: [175000, 287000, 385000],
+    description: "🌍 چند سرور در لوکیشن‌های مختلف\n♾️ ترافیک نامحدود\n🌐 مناسب وب‌گردی، دانلود، سرویس‌های آنلاین و هوش مصنوعی\n📅 اعتبار ۳۰ روزه",
+  },
 };
 const SERVER_DRAFT_MS = 86400000;
 async function cancelServerDraft(db, tgId) {
@@ -1033,10 +1045,10 @@ async function serverChoose(env, db, chatId, tgId, key) {
       .bind(tgId, token, key, key === "unlimited" ? "users" : "volume", Date.now()),
   ]);
   if (key === "unlimited") return tg(env, "sendMessage", {
-    chat_id: chatId, text: "♾️ نامحدود چندسروره، ۳۰ روزه\nتعداد کاربران را انتخاب کنید:",
+    chat_id: chatId, text: `📦 ${product.name}\n\n${product.description}\n\nتعداد کاربران را انتخاب کنید:`,
     reply_markup: { inline_keyboard: product.prices.map((price, i) => [{ text: `${fa(i + 1)} کاربر — ${fa(price)} تومان`, callback_data: `su:${token}:${i + 1}` }]) },
   });
-  return tg(env, "sendMessage", { chat_id: chatId, text: `📦 ${product.name}\n💰 هر گیگ: ${fa(product.price)} تومان\n\nحجم دلخواه را به گیگابایت به صورت عدد صحیح بین ۱ تا ۱۰۰۰ بفرستید.` });
+  return tg(env, "sendMessage", { chat_id: chatId, text: `📦 ${product.name}\n\n${product.description}\n💰 هر گیگ: ${fa(product.price)} تومان\n\nحجم دلخواه را به گیگابایت به صورت عدد صحیح بین ۱ تا ۱۰۰۰ بفرستید.` });
 }
 async function serverChooseUsers(env, db, chatId, tgId, token, users) {
   const d = await db.prepare("SELECT * FROM server_drafts WHERE tg_id=? AND token=? AND stage='users' AND created>?").bind(tgId, token, Date.now() - SERVER_DRAFT_MS).first();
