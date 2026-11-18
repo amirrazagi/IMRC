@@ -166,3 +166,24 @@ test('volume requires at least five gigabytes and leaves day minimum unchanged',
   assert.equal(sql.prepare('SELECT days FROM server_drafts').get().days, 1);
   assert.match(calls.at(-1).payload.text, /<b>💰 مبلغ نهایی: 75,000 تومان<\/b>/);
 });
+test('card and exact final amount can be copied from server invoice in left-to-right order', async () => {
+  const { ctx, calls, env, db, msg } = setup();
+  ctx.getSettings = async () => ({ pay_text: '💳 شماره کارت: 6219 8614 9829 6879\n👤 امیر' });
+  await ctx.serverChoose(env, db, 7, '7', 'multi'); await ctx.serverInput(env, db, msg, '5'); await ctx.serverInput(env, db, msg, '1');
+  const invoice = calls.at(-1).payload;
+  assert(invoice.text.includes('\u20666219861498296879\u2069'));
+  const buttons = invoice.reply_markup.inline_keyboard.flat();
+  assert.equal(buttons.find(b => b.text === '📋 کپی شماره کارت').copy_text.text, '6219861498296879');
+  assert.equal(buttons.find(b => b.text === '📋 کپی مبلغ (تومان)').copy_text.text, '75000');
+  assert(buttons.some(b => b.callback_data?.startsWith('wp:')));
+});
+test('copy buttons use the configured card and avoid ambiguous or malformed numbers', () => {
+  const { ctx } = setup();
+  const buttons = text => ctx.paymentCopyButtons(text, 123456).flat();
+  assert.equal(buttons('کارت: ۶۲۱۹-۸۶۱۴-۹۸۲۹-۶۸۷۹')[0].copy_text.text, '6219861498296879');
+  assert.equal(buttons('کارت: 1234567890123456')[0].copy_text.text, '1234567890123456');
+  assert.equal(buttons('کارت: 1234567890123456\nکارت: 1111222233334444').length, 1);
+  assert.equal(buttons('کارت: 12345678901234567').length, 1);
+  assert.equal(buttons('کارت: 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7').length, 1);
+  assert.equal(buttons('بدون شماره کارت')[0].copy_text.text, '123456');
+});
