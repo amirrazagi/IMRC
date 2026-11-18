@@ -81,3 +81,20 @@ test('closing requires successful delivery and unauthorized replies cannot send 
   assert.equal(result, false);
   assert(!calls.some(c => c.method === 'copyMessage'));
 });
+test('only the selected server description appears with its purchase options', async () => {
+  const { ctx, calls, env, db } = setup();
+  const products = [
+    ['multi', 'امکان حذف تبلیغات یوتیوب', '15000'],
+    ['wire', 'ترکیه و 🇩🇪 آلمان', '20000'],
+    ['open', 'پینگ پایین و ریجستری بالا', '30000'],
+    ['unlimited', 'ترافیک نامحدود', '۳۰ روزه'],
+  ];
+  for (const [key, detail, price] of products) {
+    await ctx.serverChoose(env, db, 7, '7', key);
+    const message = calls.at(-1).payload;
+    assert(message.text.includes(detail), key);
+    assert(message.text.includes(price), key);
+    if (key === 'unlimited') assert.equal(message.reply_markup.inline_keyboard.length, 3);
+    else assert.match(message.text, /حجم دلخواه/);
+  }
+});
