@@ -275,8 +275,7 @@ const fa = (n) => Number(n || 0).toLocaleString("fa-IR");
 // ADMIN_TG_ID را trim می‌کنیم: فاصله یا خط جدید بعد از paste در secret باعث می‌شد ادمین شناخته نشه
 const adminTgId = (env) => String(env.ADMIN_TG_ID ?? "").trim();
 const isAdmin = (env, id) => !!adminTgId(env) && String(id) === adminTgId(env);
-// کیبورد ثابت و منوی دکمه‌ای حذف شدن؛ همه‌ی کارها از فهرست «/» انجام می‌شن.
-// HIDE_KB فقط برای جمع کردن کیبورد قدیمی روی گوشی کاربرهاست.
+// جمع کردن کیبورد ثابت قدیمی؛ منوی اصلی از دکمه‌های داخل پیام استفاده می‌کند.
 const HIDE_KB = { remove_keyboard: true };
 // متن دکمه‌ها → دستور متناظر (همان مسیر دستورها اجرا می‌شه)
 const BUTTON_CMDS = {
@@ -289,26 +288,10 @@ const BUTTON_CMDS = {
   "🛠 پنل مدیریت": "/panel",
   "🎫 تیکت‌های باز": "/tickets",
 };
-// فهرست منوی «/» تلگرام
-const USER_COMMANDS = [
-  { command: "start", description: "شروع و معرفی ربات" },
-  { command: "server", description: "خرید سرور و قیمت‌ها" },
-  { command: "wallet", description: "کیف پول و شارژ" },
-  { command: "plans", description: "خرید اشتراک" },
-  { command: "config", description: "ساخت کانفیگ (همون امکانات پنل)" },
-  { command: "configs", description: "کانفیگ‌های من" },
-  { command: "me", description: "حساب من: اشتراک و کیف پول" },
-  { command: "invite", description: "دعوت دوستان و جایزه" },
-  { command: "code", description: "ثبت کد تخفیف" },
-  { command: "support", description: "پشتیبانی" },
-];
-const ADMIN_COMMANDS = [
-  { command: "panel", description: "پنل مدیریت و ورود خودکار" },
-  { command: "tickets", description: "تیکت‌های باز" },
-  { command: "reply", description: "پاسخ به تیکت: /reply ID متن" },
-];
+// فقط شروع در فهرست کنار کادر پیام؛ دستورهای قبلی همچنان قابل تایپ هستند.
+const USER_COMMANDS = [{ command: "start", description: "شروع مجدد و نمایش منو" }];
 const SUPPORT_HELP = "🎫 پیامت رو همین‌جا بنویس تا برای پشتیبانی فرستاده بشه. جوابت رو همین‌جا می‌گیری.";
-const WELCOME = "سلام 👋 به IMRC خوش اومدی.";
+const WELCOME = "سلام 👋 به IMRC خوش اومدی!\n\n⚡ ساخت کانفیگ رایگان\n💳 خرید اشتراک برای استفاده VIP از پنل\n🖥 خرید سرور\n💼 کیف پول و شارژ\n🎁 دعوت دوستان و پشتیبانی";
 
 async function tgWebhook(request, env) {
   if (!env.TG_WEBHOOK_SECRET || !safeEq(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), env.TG_WEBHOOK_SECRET))
@@ -353,37 +336,38 @@ async function notifyAdmin(env, db, text) {
   await tg(env, "sendMessage", { chat_id: env.ADMIN_TG_ID, text }).catch(() => {});
 }
 
-// منوی اصلی: خوش‌آمد (اختیاری) + راهنمای فهرست «/»؛ کیبورد قدیمی هم جمع می‌شه
-const MENU_HINT = "برای کار با ربات، کافیه «/» رو توی کادر پیام بزنی و دستور موردنظرت رو انتخاب کنی 👇";
-const UNKNOWN_CMD = "این دستور رو نمی‌شناسم. با «/» کنار کادر پیام، فهرست دستورها رو ببین.";
+// منوی اصلی داخل چت؛ آدرس پنل با PUBLIC_URL قابل تغییر است.
+const PANEL_URL = "https://imrc.adgjl1113337u79.workers.dev";
+const UNKNOWN_CMD = "این دستور رو نمی‌شناسم. برای نمایش منو /start رو بزن.";
 async function sendMainMenu(env, db, chatId, isAdminUser, text) {
-  const body = text ? `${text}\n\n${MENU_HINT}` : MENU_HINT;
-  return tg(env, "sendMessage", { chat_id: chatId, text: body, reply_markup: HIDE_KB }).catch(() => {});
+  const panelUrl = (env.PUBLIC_URL || PANEL_URL).replace(/\/$/, "");
+  const keyboard = [
+    [{ text: "🌐 ورود به پنل", url: panelUrl }],
+    [{ text: "⚡ ساخت کانفیگ رایگان", callback_data: "menu:config" }, { text: "💳 خرید اشتراک VIP", callback_data: "menu:plans" }],
+    [{ text: "🖥 خرید سرور", callback_data: "menu:server" }, { text: "💼 کیف پول و شارژ", callback_data: "menu:wallet" }],
+    [{ text: "👤 حساب من", callback_data: "menu:me" }, { text: "📂 کانفیگ‌های من", callback_data: "menu:configs" }],
+    [{ text: "🎁 دعوت دوستان", callback_data: "menu:invite" }, { text: "🎫 پشتیبانی", callback_data: "menu:support" }],
+    [{ text: "🎟 کد تخفیف", callback_data: "menu:code" }],
+  ];
+  if (isAdminUser) keyboard.push([{ text: "🛠 پنل مدیریت", callback_data: "menu:admin" }, { text: "🎫 تیکت‌های باز", callback_data: "menu:tickets" }]);
+  // تلگرام اجازه نمی‌دهد حذف کیبورد و دکمه‌های inline در یک پیام باشند.
+  await tg(env, "sendMessage", { chat_id: chatId, text: "👇 منوی ربات", reply_markup: HIDE_KB }).catch(() => {});
+  return tg(env, "sendMessage", { chat_id: chatId, text: text || WELCOME, reply_markup: { inline_keyboard: keyboard } }).catch(() => {});
 }
 
-// فهرست دستورهای «/» برای همه و برای چت ادمین (با دستورهای مدیریتی)
+// scope ادمین را هم بازنویسی می‌کنیم تا منوی قدیمی باقی نماند.
 async function syncBotCommands(env) {
   const a = await tg(env, "setMyCommands", { commands: USER_COMMANDS, scope: { type: "default" } }).catch(() => ({ ok: false }));
   let b = { ok: true };
   if (env.ADMIN_TG_ID) {
-    b = await tg(env, "setMyCommands", { commands: [...USER_COMMANDS, ...ADMIN_COMMANDS], scope: { type: "chat", chat_id: adminTgId(env) } }).catch(() => ({ ok: false }));
+    b = await tg(env, "setMyCommands", { commands: USER_COMMANDS, scope: { type: "chat", chat_id: adminTgId(env) } }).catch(() => ({ ok: false }));
   }
   return !!(a.ok && b.ok);
 }
 
 // پروفایل ربات: توضیح کامل (قبل از /start نمایش داده می‌شه، ≤۵۱۲ کاراکتر) و توضیح کوتاه (در پروفایل، ≤۱۲۰ کاراکتر)
-const BOT_DESCRIPTION = [
-  "🎮 IMRC؛ ساخت کانفیگ گیمینگ، ساده و سریع",
-  "",
-  "⚡ ساخت کانفیگ با همون امکانات پنل: کشور، حالت بازی، نقش، DNS و MTU",
-  "📂 دیدن کانفیگ‌های قبلی و سهمیه‌ی همین دوره",
-  "💳 خرید اشتراک برای سهمیه‌ی بیشتر",
-  "🎁 دعوت دوستان و گرفتن روز رایگان",
-  "🎫 پشتیبانی مستقیم همین‌جا",
-  "",
-  "برای شروع /start رو بزن 👇",
-].join("\n");
-const BOT_SHORT_DESCRIPTION = "🎮 ساخت کانفیگ گیمینگ با IMRC؛ همه‌چی همین‌جاست ⚡";
+const BOT_DESCRIPTION = "⚡ ساخت کانفیگ رایگان\n💳 خرید اشتراک برای استفاده VIP از پنل\n🖥 خرید سرور\n💼 کیف پول و شارژ\n🎁 دعوت دوستان و پشتیبانی\n\nبرای شروع /start رو بزن 👇";
+const BOT_SHORT_DESCRIPTION = "⚡ کانفیگ رایگان، اشتراک VIP، خرید سرور و کیف پول در IMRC";
 async function syncBotProfile(env) {
   const a = await tg(env, "setMyDescription", { description: BOT_DESCRIPTION }).catch(() => ({ ok: false }));
   const b = await tg(env, "setMyShortDescription", { short_description: BOT_SHORT_DESCRIPTION }).catch(() => ({ ok: false }));
@@ -680,7 +664,7 @@ async function handleText(env, db, msg, text, origin) {
   // دکمه‌های کیبورد ثابت → همان دستورها
   // دکمه‌ی کیبورد قدیمی: کیبورد جمع می‌شه و همون دستور اجرا می‌شه
   if (BUTTON_CMDS[text]) {
-    await reply("⌨️ منوی دکمه‌ای قدیمی جمع شد. از این به بعد دستورها رو از «/» کنار کادر پیام انتخاب کن.", { reply_markup: HIDE_KB });
+    await reply("⌨️ کیبورد قدیمی جمع شد. برای نمایش منو /start رو بزن.", { reply_markup: HIDE_KB });
     text = BUTTON_CMDS[text];
   }
   if (text === "🎟 کد تخفیف") return reply("برای ثبت کد تخفیف، این‌طور بفرست:\n/code کد_تخفیف");
@@ -746,6 +730,17 @@ async function handleCallback(env, db, cq, origin) {
   if (chk) {
     await answer();
     return verifyLogin(env, db, chk[1], cq.from, cq.from.id);
+  }
+  if (data.startsWith("menu:")) {
+    await db.prepare("UPDATE bot_state SET awaiting='' WHERE tg_id=? AND awaiting!=''").bind(String(cq.from.id)).run().catch(() => {});
+  }
+  if (data === "menu:server") { await answer(); return sendServerShop(env, chatId); }
+  if (data === "menu:configs") { await answer(); return sendMyConfigs(env, db, chatId, String(cq.from.id)); }
+  if (data === "menu:code") { await answer(); return tg(env, "sendMessage", { chat_id: chatId, text: "برای ثبت کد تخفیف بفرست:\n/code کد_تخفیف" }).catch(() => {}); }
+  if (data === "menu:admin" || data === "menu:tickets") {
+    if (!isAdmin(env, cq.from.id)) return answer("⛔ فقط ادمین");
+    await answer();
+    return data === "menu:admin" ? adminPanelMenu(env, db, chatId, origin) : ticketsList(env, db, chatId, "o");
   }
   if (data === "menu:plans") { await answer(); return sendPlans(env, db, chatId); }
   if (data === "menu:invite") { await answer(); return sendInvite(env, db, chatId, String(cq.from.id)); }
