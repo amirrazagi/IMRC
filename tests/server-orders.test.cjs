@@ -31,7 +31,7 @@ test('volume order computes unit price times volume, independent of 1-30 days, a
   await ctx.serverInput(env, db, msg, '۳۱');
   assert.equal(sql.prepare('SELECT stage FROM server_drafts').get().stage, 'days');
   await ctx.serverInput(env, db, msg, '۱۵');
-  assert.match(calls.at(-1).payload.text, /400000/);
+  assert.match(calls.at(-1).payload.text, /<b>💰 مبلغ نهایی: 400,000 تومان<\/b>/);
   await ctx.serverReceipt(env, db, msg);
   const order = sql.prepare('SELECT * FROM server_orders').get();
   assert.equal(order.amount, 400000); assert.equal(order.days, 15); assert.equal(order.status, 'pending');
@@ -75,7 +75,7 @@ test('failed receipt notification is recoverable and unauthorized approval is re
 test('closing requires successful delivery and unauthorized replies cannot send files', async () => {
   const { ctx, sql, env, db, msg, calls } = setup();
   await ctx.serverChoose(env, db, 7, '7', 'multi');
-  await ctx.serverInput(env, db, msg, '2'); await ctx.serverInput(env, db, msg, '3'); await ctx.serverReceipt(env, db, msg);
+  await ctx.serverInput(env, db, msg, '5'); await ctx.serverInput(env, db, msg, '3'); await ctx.serverReceipt(env, db, msg);
   const cq = { from: { id: 99 }, message: { chat: { id: 99 }, message_id: 55 } };
   await ctx.serverDecide(env, db, cq, 1, 'a', async () => {});
   let reason = '';
@@ -89,9 +89,9 @@ test('closing requires successful delivery and unauthorized replies cannot send 
 test('only the selected server description appears with its purchase options', async () => {
   const { ctx, calls, env, db } = setup();
   const products = [
-    ['multi', 'امکان حذف تبلیغات یوتیوب', '15000'],
-    ['wire', 'ترکیه و 🇩🇪 آلمان', '20000'],
-    ['open', 'پینگ پایین و ریجستری بالا', '30000'],
+    ['multi', 'امکان حذف تبلیغات یوتیوب', '15,000'],
+    ['wire', 'ترکیه و 🇩🇪 آلمان', '20,000'],
+    ['open', 'پینگ پایین و ریجستری بالا', '30,000'],
     ['unlimited', 'ترافیک نامحدود', '۳۰ روزه'],
   ];
   for (const [key, detail, price] of products) {
@@ -106,15 +106,15 @@ test('only the selected server description appears with its purchase options', a
 test('wallet server purchase is atomic, full-only and repeat safe', async () => {
   const { ctx, sql, env, db, msg } = setup();
   await ctx.serverChoose(env, db, 7, '7', 'multi');
-  await ctx.serverInput(env, db, msg, '2'); await ctx.serverInput(env, db, msg, '10');
-  sql.prepare('INSERT INTO wallet VALUES (?,?)').run('7', 29999);
+  await ctx.serverInput(env, db, msg, '5'); await ctx.serverInput(env, db, msg, '10');
+  sql.prepare('INSERT INTO wallet VALUES (?,?)').run('7', 74999);
   await ctx.payWallet(env, db, 7, '7', 'aaaaaaaaaaaaaaaa');
-  assert.equal(sql.prepare('SELECT balance FROM wallet').get().balance, 29999);
+  assert.equal(sql.prepare('SELECT balance FROM wallet').get().balance, 74999);
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM server_orders').get().n, 0);
-  sql.prepare('UPDATE wallet SET balance=50000').run();
+  sql.prepare('UPDATE wallet SET balance=100000').run();
   await ctx.payWallet(env, db, 7, '7', 'aaaaaaaaaaaaaaaa');
   await ctx.payWallet(env, db, 7, '7', 'aaaaaaaaaaaaaaaa');
-  assert.equal(sql.prepare('SELECT balance FROM wallet').get().balance, 20000);
+  assert.equal(sql.prepare('SELECT balance FROM wallet').get().balance, 25000);
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM server_orders').get().n, 1);
   assert.equal(sql.prepare('SELECT status FROM server_orders').get().status, 'approved');
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM wallet_log').get().n, 1);
@@ -135,8 +135,8 @@ test('wallet subscription applies valid discount once and extends subscription a
 test('wallet server purchase notifies admin and delivers files using invoice reply', async () => {
   const { ctx, sql, env, db, msg, calls } = setup();
   ctx.tg = async (e, method, payload) => { calls.push({ method, payload }); return { ok: true, result: { message_id: 88 } }; };
-  await ctx.serverChoose(env, db, 7, '7', 'multi'); await ctx.serverInput(env, db, msg, '1'); await ctx.serverInput(env, db, msg, '5');
-  sql.prepare('INSERT INTO wallet VALUES (?,?)').run('7', 15000);
+  await ctx.serverChoose(env, db, 7, '7', 'multi'); await ctx.serverInput(env, db, msg, '5'); await ctx.serverInput(env, db, msg, '5');
+  sql.prepare('INSERT INTO wallet VALUES (?,?)').run('7', 75000);
   await ctx.payWallet(env, db, 7, '7', 'aaaaaaaaaaaaaaaa');
   assert.equal(sql.prepare('SELECT admin_msg_id FROM server_orders').get().admin_msg_id, 88);
   await ctx.serverDelivery(env, db, { chat: { id: 99 }, from: { id: 99 }, message_id: 102, document: { file_id: 'cfg' }, reply_to_message: { message_id: 88 } });
@@ -152,4 +152,17 @@ test('expired discount and other user cannot pay a quote', async () => {
   await ctx.payWallet(env, db, 7, '7', '0123456789abcdef');
   assert.equal(sql.prepare('SELECT balance FROM wallet').get().balance, 100000);
   assert.equal(sql.prepare('SELECT COUNT(*) n FROM wallet_payments').get().n, 0);
+});
+test('volume requires at least five gigabytes and leaves day minimum unchanged', async () => {
+  const { ctx, sql, calls, env, db, msg } = setup();
+  await ctx.serverChoose(env, db, 7, '7', 'multi');
+  assert.match(calls.at(-1).payload.text, /بین ۵ تا ۱۰۰۰/);
+  assert.equal(calls.at(-1).payload.parse_mode, 'HTML');
+  await ctx.serverInput(env, db, msg, '۴');
+  assert.equal(sql.prepare('SELECT stage FROM server_drafts').get().stage, 'volume');
+  await ctx.serverInput(env, db, msg, '۵');
+  assert.equal(sql.prepare('SELECT stage FROM server_drafts').get().stage, 'days');
+  await ctx.serverInput(env, db, msg, '۱');
+  assert.equal(sql.prepare('SELECT days FROM server_drafts').get().days, 1);
+  assert.match(calls.at(-1).payload.text, /<b>💰 مبلغ نهایی: 75,000 تومان<\/b>/);
 });

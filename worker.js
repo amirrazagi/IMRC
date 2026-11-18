@@ -1084,6 +1084,9 @@ const SERVER_PRODUCTS = {
   },
 };
 const SERVER_DRAFT_MS = 86400000;
+const SERVER_MIN_GB = 5;
+const serverPrice = n => Number(n).toLocaleString("en-US");
+const escapeTelegramHtml = value => String(value ?? "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 async function cancelServerDraft(db, tgId) {
   await db.prepare("DELETE FROM server_drafts WHERE tg_id=?").bind(String(tgId)).run();
 }
@@ -1106,9 +1109,9 @@ async function serverChoose(env, db, chatId, tgId, key) {
   ]);
   if (key === "unlimited") return tg(env, "sendMessage", {
     chat_id: chatId, text: `📦 ${product.name}\n\n${product.description}\n\nتعداد کاربران را انتخاب کنید:`,
-    reply_markup: { inline_keyboard: product.prices.map((price, i) => [{ text: `${fa(i + 1)} کاربر — ${fa(price)} تومان`, callback_data: `su:${token}:${i + 1}` }]) },
+    reply_markup: { inline_keyboard: product.prices.map((price, i) => [{ text: `${fa(i + 1)} کاربر — ${serverPrice(price)} تومان`, callback_data: `su:${token}:${i + 1}` }]) },
   });
-  return tg(env, "sendMessage", { chat_id: chatId, text: `📦 ${product.name}\n\n${product.description}\n💰 هر گیگ: ${fa(product.price)} تومان\n\nحجم دلخواه را به گیگابایت به صورت عدد صحیح بین ۱ تا ۱۰۰۰ بفرستید.` });
+  return tg(env, "sendMessage", { chat_id: chatId, parse_mode: "HTML", text: `📦 ${product.name}\n\n${product.description}\n\n<b>💰 هر گیگ: ${serverPrice(product.price)} تومان</b>\n\nحجم دلخواه را به گیگابایت به صورت عدد صحیح بین ۵ تا ۱۰۰۰ بفرستید.` });
 }
 async function serverChooseUsers(env, db, chatId, tgId, token, users) {
   const d = await db.prepare("SELECT * FROM server_drafts WHERE tg_id=? AND token=? AND stage='users' AND created>?").bind(tgId, token, Date.now() - SERVER_DRAFT_MS).first();
@@ -1124,9 +1127,9 @@ async function serverInput(env, db, msg, text) {
   const tgId = String(msg.from.id), chatId = msg.chat.id;
   const d = await db.prepare("SELECT * FROM server_drafts WHERE tg_id=? AND created>? AND stage IN ('volume','days')").bind(tgId, Date.now() - SERVER_DRAFT_MS).first();
   if (!d) return false;
-  const n = serverInteger(text), max = d.stage === "volume" ? 1000 : 30;
-  if (!Number.isInteger(n) || n < 1 || n > max) {
-    await tg(env, "sendMessage", { chat_id: chatId, text: `⚠️ لطفاً یک عدد صحیح بین ۱ و ${fa(max)} بفرستید؛ برای خروج /start را بزنید.` });
+  const n = serverInteger(text), min = d.stage === "volume" ? SERVER_MIN_GB : 1, max = d.stage === "volume" ? 1000 : 30;
+  if (!Number.isInteger(n) || n < min || n > max) {
+    await tg(env, "sendMessage", { chat_id: chatId, text: `⚠️ لطفاً یک عدد صحیح بین ${fa(min)} و ${fa(max)} بفرستید؛ برای خروج /start را بزنید.` });
     return true;
   }
   if (d.stage === "volume") {
@@ -1134,16 +1137,22 @@ async function serverInput(env, db, msg, text) {
     if (result.meta.changes) await tg(env, "sendMessage", { chat_id: chatId, text: "📅 مدت سرویس را به روز، از ۱ تا ۳۰، به صورت عدد بفرستید. مدت روی قیمت تأثیر ندارد." });
   } else {
     const product = SERVER_PRODUCTS[d.product];
+    if (d.volume < SERVER_MIN_GB) {
+      await db.prepare("UPDATE server_drafts SET stage='volume',volume=NULL WHERE tg_id=? AND token=? AND stage='days'").bind(tgId, d.token).run();
+      await tg(env, "sendMessage", { chat_id: chatId, text: "⚠️ حداقل حجم ۵ گیگابایت است؛ حجم را دوباره وارد کنید." });
+      return true;
+    }
     if (!product || !product.price || !d.volume) { await cancelServerDraft(db, tgId); return true; }
     const result = await db.prepare("UPDATE server_drafts SET days=?,amount=?,stage='receipt' WHERE tg_id=? AND token=? AND stage='days'").bind(n, d.volume * product.price, tgId, d.token).run();
     if (result.meta.changes) await serverInvoice(env, db, chatId, tgId, d.token);
   }
   return true;
 }
-function serverDetails(d) {
+function serverDetails(d, boldPrices = false) {
   const product = SERVER_PRODUCTS[d.product];
   if (!product) return "سرویس نامشخص";
-  return `📦 سرویس: ${product.name}\n${d.product === "unlimited" ? `👥 تعداد کاربر: ${fa(d.users)}\n♾️ حجم: نامحدود` : `📊 حجم: ${fa(d.volume)} گیگابایت\n💵 قیمت هر گیگ: ${fa(d.amount / d.volume)} تومان`}\n📅 مدت: ${fa(d.days)} روز\n💰 مبلغ نهایی: ${fa(d.amount)} تومان`;
+  const priceLine = text => boldPrices ? `<b>${text}</b>` : text;
+  return `📦 سرویس: ${product.name}\n${d.product === "unlimited" ? `👥 تعداد کاربر: ${fa(d.users)}\n♾️ حجم: نامحدود` : `📊 حجم: ${fa(d.volume)} گیگابایت\n${priceLine(`💵 قیمت هر گیگ: ${serverPrice(d.amount / d.volume)} تومان`)}`}\n📅 مدت: ${fa(d.days)} روز\n\n${priceLine(`💰 مبلغ نهایی: ${serverPrice(d.amount)} تومان`)}`;
 }
 async function serverInvoice(env, db, chatId, tgId, token) {
   const d = await db.prepare("SELECT * FROM server_drafts WHERE tg_id=? AND token=? AND stage='receipt'").bind(tgId, token).first();
@@ -1151,7 +1160,7 @@ async function serverInvoice(env, db, chatId, tgId, token) {
   const st = await getSettings(db);
   await db.prepare("INSERT OR IGNORE INTO wallet_quotes(token,tg_id,kind,amount,created) VALUES(?,?,'server',?,?)").bind(token, tgId, d.amount, Date.now()).run();
   const balance = await walletBalance(db, tgId);
-  return tg(env, "sendMessage", { chat_id: chatId, text: `🧾 صورت‌حساب سفارش سرور\n━━━━━━━━━━━━━━━━\n${serverDetails(d)}\n━━━━━━━━━━━━━━━━\n💼 موجودی کیف پول: ${fa(balance)} تومان\n\n${st.pay_text}\n\nبا کیف پول کل مبلغ را پرداخت کنید یا بعد از پرداخت کارت‌به‌کارت عکس رسید را بفرستید. تحویل توسط پشتیبانی دستی است.`,
+  return tg(env, "sendMessage", { chat_id: chatId, parse_mode: "HTML", text: `🧾 صورت‌حساب سفارش سرور\n━━━━━━━━━━━━━━━━\n${serverDetails(d, true)}\n━━━━━━━━━━━━━━━━\n💼 موجودی کیف پول: ${serverPrice(balance)} تومان\n\n${escapeTelegramHtml(st.pay_text)}\n\nبا کیف پول کل مبلغ را پرداخت کنید یا بعد از پرداخت کارت‌به‌کارت عکس رسید را بفرستید. تحویل توسط پشتیبانی دستی است.`,
     reply_markup: { inline_keyboard: [[{ text: "💼 پرداخت کامل با کیف پول", callback_data: `wp:${token}` }]] },
   });
 }
@@ -2846,7 +2855,7 @@ async function payWallet(env, db, chatId, tgId, token) {
   const order = await db.prepare("SELECT * FROM server_orders WHERE payment_token=?").bind(token).first();
   if (order) {
     const sent = await sendWalletOrderToAdmin(env, db, order);
-    return reply(`✅ مبلغ ${fa(q.amount)} تومان از کیف پول کسر شد. سفارش سرور #${order.id} ثبت شد و پشتیبانی آن را دستی تحویل می‌دهد.${sent ? "" : "\n⚠️ ارسال اعلان به ادمین ناموفق بود؛ سفارش در بخش سفارش‌های پنل مدیریت ثبت است."}`);
+    return reply(`✅ مبلغ ${serverPrice(q.amount)} تومان از کیف پول کسر شد. سفارش سرور #${order.id} ثبت شد و پشتیبانی آن را دستی تحویل می‌دهد.${sent ? "" : "\n⚠️ ارسال اعلان به ادمین ناموفق بود؛ سفارش در بخش سفارش‌های پنل مدیریت ثبت است."}`);
   }
 }
 async function sendWalletOrderToAdmin(env, db, order) {
