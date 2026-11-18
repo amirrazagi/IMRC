@@ -1065,6 +1065,24 @@ async function sendInvite(env, db, chatId, tgId) {
 }
 
 // سفارش سرور: قیمت‌های فعلی فروشگاه به تومان، مستقل از تعداد روز.
+// شماره از متن پرداخت تنظیم‌شده خوانده می‌شود تا دکمه و متن به حساب‌های متفاوت اشاره نکنند.
+function paymentCardMatches(text) {
+  return [...String(text || "").matchAll(/(?<![0-9۰-۹٠-٩])(?<![0-9۰-۹٠-٩][ \t-])(?:[0-9۰-۹٠-٩][ \t-]?){15}[0-9۰-۹٠-٩](?![ \t-]*[0-9۰-۹٠-٩])/g)];
+}
+function cardDigits(value) {
+  return String(value).replace(/[۰-۹]/g, c => String(c.charCodeAt(0) - 1776)).replace(/[٠-٩]/g, c => String(c.charCodeAt(0) - 1632)).replace(/[^0-9]/g, "");
+}
+function formatPaymentText(text) {
+  return String(text || "").replace(/(?<![0-9۰-۹٠-٩])(?<![0-9۰-۹٠-٩][ \t-])(?:[0-9۰-۹٠-٩][ \t-]?){15}[0-9۰-۹٠-٩](?![ \t-]*[0-9۰-۹٠-٩])/g, card => `\u2066${cardDigits(card)}\u2069`);
+}
+function paymentCopyButtons(text, amount) {
+  const cards = paymentCardMatches(text);
+  const rows = [];
+  if (cards.length === 1) rows.push([{ text: "📋 کپی شماره کارت", copy_text: { text: cardDigits(cards[0][0]) } }]);
+  if (Number.isSafeInteger(amount) && amount >= 0) rows.push([{ text: "📋 کپی مبلغ (تومان)", copy_text: { text: String(amount) } }]);
+  return rows;
+}
+
 const SERVER_PRODUCTS = {
   multi: {
     name: "مولتی‌لوکیشن فول‌تانل", price: 15000,
@@ -1160,8 +1178,8 @@ async function serverInvoice(env, db, chatId, tgId, token) {
   const st = await getSettings(db);
   await db.prepare("INSERT OR IGNORE INTO wallet_quotes(token,tg_id,kind,amount,created) VALUES(?,?,'server',?,?)").bind(token, tgId, d.amount, Date.now()).run();
   const balance = await walletBalance(db, tgId);
-  return tg(env, "sendMessage", { chat_id: chatId, parse_mode: "HTML", text: `🧾 صورت‌حساب سفارش سرور\n━━━━━━━━━━━━━━━━\n${serverDetails(d, true)}\n━━━━━━━━━━━━━━━━\n💼 موجودی کیف پول: ${serverPrice(balance)} تومان\n\n${escapeTelegramHtml(st.pay_text)}\n\nبا کیف پول کل مبلغ را پرداخت کنید یا بعد از پرداخت کارت‌به‌کارت عکس رسید را بفرستید. تحویل توسط پشتیبانی دستی است.`,
-    reply_markup: { inline_keyboard: [[{ text: "💼 پرداخت کامل با کیف پول", callback_data: `wp:${token}` }]] },
+  return tg(env, "sendMessage", { chat_id: chatId, parse_mode: "HTML", text: `🧾 صورت‌حساب سفارش سرور\n━━━━━━━━━━━━━━━━\n${serverDetails(d, true)}\n━━━━━━━━━━━━━━━━\n💼 موجودی کیف پول: ${serverPrice(balance)} تومان\n\n${escapeTelegramHtml(formatPaymentText(st.pay_text))}\n\nبا کیف پول کل مبلغ را پرداخت کنید یا بعد از پرداخت کارت‌به‌کارت عکس رسید را بفرستید. تحویل توسط پشتیبانی دستی است.`,
+    reply_markup: { inline_keyboard: [[{ text: "💼 پرداخت کامل با کیف پول", callback_data: `wp:${token}` }], ...paymentCopyButtons(st.pay_text, d.amount)] },
   });
 }
 async function serverReceipt(env, db, msg) {
@@ -1268,13 +1286,13 @@ async function sendWallet(env, db, chatId, tgId, raw) {
   });
 }
 async function startTopup(env, db, chatId, tgId, amount) {
-  const reply = (t) => tg(env, "sendMessage", { chat_id: chatId, text: t }).catch(() => {});
+  const reply = (t, extra = {}) => tg(env, "sendMessage", { chat_id: chatId, text: t, ...extra }).catch(() => {});
   await cancelServerDraft(db, tgId);
   if (!(amount >= TOPUP_MIN && amount <= TOPUP_MAX)) return reply(`⚠️ مبلغ شارژ باید بین ${fa(TOPUP_MIN)} و ${fa(TOPUP_MAX)} تومان باشه.`);
   await db.prepare("INSERT INTO pending_buy(tg_id,plan,code,ts,topup) VALUES(?,NULL,NULL,?,?) ON CONFLICT(tg_id) DO UPDATE SET plan=NULL, code=NULL, topup=excluded.topup, ts=excluded.ts, use_wallet=0")
     .bind(tgId, Date.now(), amount).run();
   const st = await getSettings(db);
-  return reply(`💼 شارژ کیف پول به مبلغ ${fa(amount)} تومان\n\n${st.pay_text}\n\nبعد از پرداخت، عکس رسید رو همین‌جا بفرست. بعد از تأیید ادمین، مبلغ به کیف پولت اضافه می‌شه.`);
+  return reply(`💼 شارژ کیف پول به مبلغ ${fa(amount)} تومان\n\n${formatPaymentText(st.pay_text)}\n\nبعد از پرداخت، عکس رسید رو همین‌جا بفرست. بعد از تأیید ادمین، مبلغ به کیف پولت اضافه می‌شه.`, { reply_markup: { inline_keyboard: paymentCopyButtons(st.pay_text, amount) } });
 }
 
 async function sendPlans(env, db, chatId) {
@@ -1283,7 +1301,7 @@ async function sendPlans(env, db, chatId) {
   const kb = { inline_keyboard: st.plans.map((p) => [{ text: `${p.name} • ${fa(p.price)} تومان`, callback_data: "buy:" + p.key }]) };
   return tg(env, "sendMessage", {
     chat_id: chatId,
-    text: `💳 پلن‌های اشتراک:\n\n${list}\n\n${st.pay_text}\n\nیکی از پلن‌ها رو انتخاب کن و بعد عکس رسید رو بفرست.`,
+    text: `💳 پلن‌های اشتراک:\n\n${list}\n\n${formatPaymentText(st.pay_text)}\n\nیکی از پلن‌ها رو انتخاب کن و بعد عکس رسید رو بفرست.`,
     reply_markup: kb,
   }).catch(() => {});
 }
@@ -1303,7 +1321,7 @@ async function pendingCode(db, tgId) {
 
 async function choosePlan(env, db, chatId, tgId, key) {
   await cancelServerDraft(db, tgId);
-  const reply = (t) => tg(env, "sendMessage", { chat_id: chatId, text: t }).catch(() => {});
+  const reply = (t, extra = {}) => tg(env, "sendMessage", { chat_id: chatId, text: t, ...extra }).catch(() => {});
   const st = await getSettings(db);
   const plan = st.plans.find((p) => p.key === key);
   if (!plan) return reply("این پلن دیگه وجود نداره. دوباره /plans رو بفرست.");
@@ -1311,7 +1329,7 @@ async function choosePlan(env, db, chatId, tgId, key) {
     .bind(tgId, key, Date.now()).run();
   const row = await pendingCode(db, tgId);
   const price = priceAfter(plan, row);
-  await reply(`✅ پلن «${plan.name}» (${fa(plan.days)} روز) انتخاب شد.\n💰 مبلغ: ${fa(price)} تومان${row ? ` (با کد ${row.code})` : ""}\n\n${st.pay_text}\n\nبعد از پرداخت، عکس رسید رو همین‌جا بفرست.`);
+  await reply(`✅ پلن «${plan.name}» (${fa(plan.days)} روز) انتخاب شد.\n💰 مبلغ: ${fa(price)} تومان${row ? ` (با کد ${row.code})` : ""}\n\n${formatPaymentText(st.pay_text)}\n\nبعد از پرداخت، عکس رسید رو همین‌جا بفرست.`, { reply_markup: { inline_keyboard: paymentCopyButtons(st.pay_text, price) } });
   return walletOffer(env, db, chatId, tgId, plan, row);
 }
 
@@ -1448,7 +1466,7 @@ const DEFAULTS = {
   sub_limit: "20",
   free_countries: "tr,de,ae",
   buy_text: "سقف ساخت کانفیگ رایگان امروز تموم شد.\nبرای ساخت بیشتر، اشتراک تهیه کن:\n\n💳 از ربات تلگرام پلن رو انتخاب کن (/plans) و بعد از پرداخت، عکس رسید رو همان‌جا بفرست.",
-  pay_text: "💳 شماره کارت: 6219 8614 9829 6879\n👤 به نام: امیر رزاقی ساعی (بانک سامان)",
+  pay_text: "💳 شماره کارت: 6219861498296879\n👤 به نام: امیر رزاقی ساعی (بانک سامان)",
   plans: "w|هفتگی|7|50000\nm|ماهانه|30|150000\nq|سه‌ماهه|90|400000",
   ref_days: "2",
   ref_credit: "0",
