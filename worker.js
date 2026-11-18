@@ -94,6 +94,9 @@ function getDB(env) {
           file_id TEXT NOT NULL, status TEXT NOT NULL, created INTEGER NOT NULL,
           admin_msg_id INTEGER, decided INTEGER, decided_by TEXT)`),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_server_orders_admin_msg ON server_orders(admin_msg_id)"),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS server_deliveries(
+          order_id INTEGER NOT NULL, source_chat TEXT NOT NULL, source_message INTEGER NOT NULL,
+          created INTEGER NOT NULL, PRIMARY KEY(source_chat, source_message))`),
         env.DB.prepare(`CREATE TABLE IF NOT EXISTS discount_codes(
           code TEXT PRIMARY KEY, percent INTEGER, max_uses INTEGER DEFAULT 0, used INTEGER DEFAULT 0,
           expires INTEGER, active INTEGER DEFAULT 1, created INTEGER)`),
@@ -323,6 +326,7 @@ async function tgWebhook(request, env) {
   if (msg.chat.type !== "private") return new Response("ok");
   await touchUser(env, db, msg.from).catch(() => {});
   try {
+    if (isAdmin(env, msg.from.id) && msg.reply_to_message && await serverDelivery(env, db, msg)) return new Response("ok");
     if (msg.photo) { if (!(await serverReceipt(env, db, msg))) await handleReceipt(env, db, msg); }
     else await handleText(env, db, msg, String(msg.text || "").trim(), origin);
   } catch (e) { console.error("message", e); }
@@ -645,7 +649,6 @@ async function sendStoredConfig(env, db, cq, id, chatId, answer) {
 async function handleText(env, db, msg, text, origin) {
   const chatId = msg.chat.id, from = msg.from, tgId = String(from.id);
   const reply = (t, extra = {}) => tg(env, "sendMessage", { chat_id: chatId, text: t, ...extra }).catch(() => {});
-  if (isAdmin(env, from.id) && msg.reply_to_message && text && await serverDelivery(env, db, msg, text)) return;
   if (text && !text.startsWith("/") && !KB_TEXTS.has(text) && await serverInput(env, db, msg, text)) return;
   // فرم ساخت کانفیگ: اگه منتظر اسم باشیم و پیام عادی باشه، همون پیام اسمه؛ دستور یا دکمه یعنی فرم رو ول کرده
   if (text.startsWith("/") || KB_TEXTS.has(text)) {
@@ -747,7 +750,7 @@ async function handleCallback(env, db, cq, origin) {
   if (serverSelect) { await answer(); return serverChoose(env, db, chatId, String(cq.from.id), serverSelect[1]); }
   const serverUsers = data.match(/^su:([a-f0-9]{16}):([123])$/);
   if (serverUsers) { await answer(); return serverChooseUsers(env, db, chatId, String(cq.from.id), serverUsers[1], Number(serverUsers[2])); }
-  const serverDecision = data.match(/^sd:([ar]):(\d{1,12})$/);
+  const serverDecision = data.match(/^sd:([ard]):(\d{1,12})$/);
   if (serverDecision) return serverDecide(env, db, cq, Number(serverDecision[2]), serverDecision[1], answer);
   if (data.startsWith("menu:")) {
     await db.prepare("DELETE FROM server_drafts WHERE tg_id=? AND stage IN ('volume','days','users')").bind(String(cq.from.id)).run();
@@ -1098,7 +1101,7 @@ async function serverReceipt(env, db, msg) {
       .bind(tgId, d.product, d.volume, d.days, d.users, d.amount, photo.file_id, Date.now()).run();
     id = ins.meta.last_row_id;
     const name = [msg.from.first_name, msg.from.last_name].filter(Boolean).join(" ").slice(0, 100);
-    const caption = `🧾 صورت‌حساب سفارش سرور #${id}\n━━━━━━━━━━━━━━━━\n👤 مشتری: ${name || "—"}${msg.from.username ? " (@" + msg.from.username + ")" : ""}\n🆔 شناسه تلگرام: ${tgId}\n${serverDetails(d)}\n━━━━━━━━━━━━━━━━\nرسید را بررسی کنید. پس از تأیید، برای تحویل دستی روی همین پیام Reply کنید و اطلاعات سرویس را بفرستید.`;
+    const caption = `🧾 صورت‌حساب سفارش سرور #${id}\n━━━━━━━━━━━━━━━━\n👤 مشتری: ${name || "—"}${msg.from.username ? " (@" + msg.from.username + ")" : ""}\n🆔 شناسه تلگرام: ${tgId}\n${serverDetails(d)}\n━━━━━━━━━━━━━━━━\nرسید را بررسی کنید. پس از تأیید، فایل‌ها و اطلاعات سرویس را با Reply به همین پیام بفرستید و سپس «تحویل داده شد» را بزنید.`;
     const sent = await tg(env, "sendPhoto", { chat_id: adminTgId(env), photo: photo.file_id, caption, reply_markup: { inline_keyboard: [[{ text: "✅ تأیید پرداخت", callback_data: `sd:a:${id}` }, { text: "❌ رد رسید", callback_data: `sd:r:${id}` }]] } });
     if (!sent.ok || !sent.result || !sent.result.message_id) throw new Error("invoice send failed");
     await db.prepare("UPDATE server_orders SET status='pending',admin_msg_id=? WHERE id=? AND status='sending'").bind(sent.result.message_id, id).run();
@@ -1115,24 +1118,51 @@ async function serverReceipt(env, db, msg) {
 async function serverDecide(env, db, cq, id, action, answer) {
   if (!isAdmin(env, cq.from.id)) return answer("⛔ فقط ادمین");
   const order = await db.prepare("SELECT * FROM server_orders WHERE id=?").bind(id).first();
-  if (!order || order.status !== "pending") return answer("سفارش پیدا نشد یا قبلاً بررسی شده است.");
+  if (!order) return answer("سفارش پیدا نشد.");
+  if (action === "d") {
+    if (order.status !== "approved") return answer("این سفارش باز و تأییدشده نیست.");
+    const count = await db.prepare("SELECT COUNT(*) n FROM server_deliveries WHERE order_id=?").bind(id).first();
+    if (!count || !count.n) return answer("ابتدا فایل یا اطلاعات سرویس را با Reply به رسید ارسال کنید.");
+    const res = await db.prepare("UPDATE server_orders SET status='delivered' WHERE id=? AND status='approved'").bind(id).run();
+    if (!res.meta.changes) return answer("این سفارش قبلاً بسته شده است.");
+    const sent = await tg(env, "sendMessage", { chat_id: order.tg_id, text: `✅ سفارش سرور #${id} تحویل داده شد و بسته شد. فایل‌ها و اطلاعات سرویس در پیام‌های قبلی همین چت قرار دارند.` }).catch(() => ({ ok: false }));
+    if (!sent.ok) {
+      await db.prepare("UPDATE server_orders SET status='approved' WHERE id=? AND status='delivered'").bind(id).run();
+      return answer("پیام به مشتری نرسید؛ سفارش باز ماند، دوباره تلاش کنید.");
+    }
+    await tg(env, "editMessageReplyMarkup", { chat_id: adminTgId(env), message_id: order.admin_msg_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
+    return answer("سفارش تحویل و بسته شد ✅");
+  }
+  if (order.status !== "pending") return answer("سفارش قبلاً بررسی شده است.");
   const status = action === "a" ? "approved" : "rejected";
   const res = await db.prepare("UPDATE server_orders SET status=?,decided=?,decided_by=? WHERE id=? AND status='pending'").bind(status, Date.now(), String(cq.from.id), id).run();
   if (!res.meta.changes) return answer("قبلاً بررسی شده است.");
   await tg(env, "sendMessage", { chat_id: order.tg_id, text: action === "a" ? `✅ پرداخت سفارش سرور #${id} تأیید شد. پشتیبانی اطلاعات سرویس را برای شما ارسال می‌کند.` : `❌ رسید سفارش سرور #${id} تأیید نشد. برای پیگیری با پشتیبانی در ارتباط باشید.` }).catch(() => {});
-  await stampReceipt(env, cq, action === "a" ? "✅ پرداخت تأیید شد؛ برای تحویل روی همین پیام Reply کنید." : "❌ رسید رد شد.");
-  return answer(action === "a" ? "تأیید شد؛ سرویس را دستی تحویل دهید." : "رد شد.");
+  if (action === "a") {
+    const m = cq.message;
+    if (m) await tg(env, "editMessageCaption", {
+      chat_id: m.chat.id, message_id: m.message_id,
+      caption: `${m.caption || ""}\n\n✅ پرداخت تأیید شد؛ فایل‌ها یا متن را با Reply به همین پیام بفرستید و بعد «تحویل داده شد» را بزنید.`.slice(0, 1024),
+      reply_markup: { inline_keyboard: [[{ text: "📦 تحویل داده شد", callback_data: `sd:d:${id}` }]] },
+    }).catch(() => {});
+  } else await stampReceipt(env, cq, "❌ رسید رد شد.");
+  return answer(action === "a" ? "تأیید شد؛ فایل‌ها را با Reply ارسال کنید." : "رد شد.");
 }
-async function serverDelivery(env, db, msg, text) {
-  const id = msg.reply_to_message.message_id;
-  const order = await db.prepare("SELECT * FROM server_orders WHERE admin_msg_id=?").bind(id).first();
+async function serverDelivery(env, db, msg) {
+  if (!msg.reply_to_message || !isAdmin(env, msg.from.id) || String(msg.chat.id) !== adminTgId(env)) return false;
+  const order = await db.prepare("SELECT * FROM server_orders WHERE admin_msg_id=?").bind(msg.reply_to_message.message_id).first();
   if (!order) return false;
-  const reply = t => tg(env, "sendMessage", { chat_id: msg.chat.id, text: t }).catch(() => {});
-  if (order.status !== "approved") { await reply("⚠️ فقط بعد از تأیید پرداخت، امکان تحویل با پاسخ به این پیام وجود دارد."); return true; }
-  const sent = await tg(env, "sendMessage", { chat_id: order.tg_id, text: `📦 اطلاعات سرویس سفارش #${order.id}:\n\n${text}` }).catch(() => ({ ok: false }));
-  if (!sent.ok) { await reply("⚠️ ارسال اطلاعات سرویس به مشتری ناموفق بود؛ دوباره تلاش کنید."); return true; }
-  await db.prepare("UPDATE server_orders SET status='delivered' WHERE id=? AND status='approved'").bind(order.id).run();
-  await reply(`✅ اطلاعات سفارش #${order.id} برای مشتری ارسال شد.`);
+  const reply = (text, extra = {}) => tg(env, "sendMessage", { chat_id: msg.chat.id, text, ...extra }).catch(() => {});
+  if (order.status !== "approved") { await reply("⚠️ فقط سفارش تأییدشده و باز می‌تواند تحویل بگیرد."); return true; }
+  if (!msg.text && !msg.document && !msg.photo) { await reply("⚠️ فقط متن، فایل یا عکس را به رسید Reply کنید."); return true; }
+  const existing = await db.prepare("SELECT order_id FROM server_deliveries WHERE source_chat=? AND source_message=?").bind(String(msg.chat.id), msg.message_id).first();
+  if (existing) { await reply("این پیام قبلاً ارسال شده است."); return true; }
+  const sent = await tg(env, "copyMessage", { chat_id: order.tg_id, from_chat_id: msg.chat.id, message_id: msg.message_id }).catch(() => ({ ok: false }));
+  if (!sent.ok) { await reply("⚠️ ارسال به مشتری ناموفق بود؛ فایل یا پیام را دوباره Reply کنید."); return true; }
+  await db.prepare("INSERT OR IGNORE INTO server_deliveries(order_id,source_chat,source_message,created) VALUES(?,?,?,?)").bind(order.id, String(msg.chat.id), msg.message_id, Date.now()).run();
+  await reply(`✅ این پیام برای مشتری سفارش #${order.id} ارسال شد. فایل‌های دیگر را هم جداگانه به رسید Reply کنید؛ پس از ارسال همه، «تحویل داده شد» را بزنید.`, {
+    reply_markup: { inline_keyboard: [[{ text: "📦 تحویل داده شد", callback_data: `sd:d:${order.id}` }]] },
+  });
   return true;
 }
 
