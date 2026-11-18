@@ -125,6 +125,12 @@ function getDB(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS bot_state(tg_id TEXT PRIMARY KEY, draft TEXT, awaiting TEXT DEFAULT '', mid INTEGER DEFAULT 0, ts INTEGER)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS incidents(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, level TEXT, body TEXT, started INTEGER, resolved INTEGER)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS wallet(tg_id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)"),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS wallet_quotes(
+          token TEXT PRIMARY KEY, tg_id TEXT NOT NULL, kind TEXT NOT NULL, amount INTEGER NOT NULL,
+          plan TEXT, days INTEGER, code TEXT, percent INTEGER, pending_ts INTEGER, created INTEGER NOT NULL)`),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS wallet_payments(
+          token TEXT PRIMARY KEY, tg_id TEXT NOT NULL, kind TEXT NOT NULL, amount INTEGER NOT NULL,
+          status TEXT NOT NULL, created INTEGER NOT NULL)`),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS wallet_log(id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id TEXT, ts INTEGER, delta INTEGER, reason TEXT)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS push_subs(endpoint TEXT PRIMARY KEY, tg_id TEXT, p256dh TEXT, auth TEXT, created INTEGER)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_push_tg ON push_subs(tg_id)"),
@@ -140,7 +146,7 @@ function getDB(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_chat_unread ON chat_msgs(sender, read_admin)"),
       ]);
       // ستون‌های جدید روی جدول‌های قبلی (اگه از قبل باشن خطا می‌ده و نادیده گرفته می‌شه)
-      for (const sql of ["ALTER TABLE pending_buy ADD COLUMN use_wallet INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN wallet_used INTEGER DEFAULT 0", "ALTER TABLE pending_buy ADD COLUMN topup INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN kind TEXT DEFAULT 'sub'"]) {
+      for (const sql of ["ALTER TABLE pending_buy ADD COLUMN use_wallet INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN wallet_used INTEGER DEFAULT 0", "ALTER TABLE pending_buy ADD COLUMN topup INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN kind TEXT DEFAULT 'sub'", "ALTER TABLE server_orders ADD COLUMN payment_token TEXT"]) {
         try { await env.DB.prepare(sql).run(); } catch (e) { /* already exists */ }
       }
       for (const col of ["tg_id", "tg_name", "tg_username"]) {
@@ -715,6 +721,8 @@ async function handleText(env, db, msg, text, origin) {
       : "ℹ️ اگه این حساب ادمینه، این عدد رو (فقط عدد، بدون @ و فاصله) توی ADMIN_TG_ID بذار و دوباره امتحان کن."));
   }
   if (/^\/me(@\S+)?(\s|$)/i.test(text)) return sendMyStatus(env, db, chatId, tgId);
+  m = text.match(/^\/user(?:@\S+)?\s+(\d{3,20})\s*$/i);
+  if (m) return isAdmin(env, from.id) ? adminBotUser(env, db, chatId, m[1]) : reply(NOT_ADMIN);
   if (/^\/(panel|admin)(@\S+)?(\s|$)/i.test(text)) return isAdmin(env, from.id) ? adminPanelMenu(env, db, chatId, origin) : reply(NOT_ADMIN);
   m = text.match(/^\/tickets(?:@\S+)?(?:\s+(open|closed|all))?\s*$/i);
   if (m) {
@@ -750,6 +758,14 @@ async function handleCallback(env, db, cq, origin) {
   if (serverSelect) { await answer(); return serverChoose(env, db, chatId, String(cq.from.id), serverSelect[1]); }
   const serverUsers = data.match(/^su:([a-f0-9]{16}):([123])$/);
   if (serverUsers) { await answer(); return serverChooseUsers(env, db, chatId, String(cq.from.id), serverUsers[1], Number(serverUsers[2])); }
+  const walletPayment = data.match(/^wp:([a-f0-9]{16})$/);
+  if (walletPayment) { await answer(); return payWallet(env, db, chatId, String(cq.from.id), walletPayment[1]); }
+  const adminAction = data.match(/^ad:(stats|users|orders|order|user):(\d{1,20})?$/);
+  if (adminAction) {
+    if (!isAdmin(env, cq.from.id)) return answer("⛔ فقط ادمین");
+    await answer();
+    return adminBotAction(env, db, chatId, adminAction[1], adminAction[2]);
+  }
   const serverDecision = data.match(/^sd:([ard]):(\d{1,12})$/);
   if (serverDecision) return serverDecide(env, db, cq, Number(serverDecision[2]), serverDecision[1], answer);
   if (data.startsWith("menu:")) {
@@ -770,7 +786,7 @@ async function handleCallback(env, db, cq, origin) {
   const buy = data.match(/^buy:([a-z0-9_]{1,16})$/);
   if (buy) { await answer(); return choosePlan(env, db, chatId, String(cq.from.id), buy[1]); }
   const wal = data.match(/^wal:([01])$/);
-  if (wal) { await answer(); return setWallet(env, db, chatId, String(cq.from.id), wal[1] === "1"); }
+  if (wal) { await answer("پرداخت ترکیبی غیرفعال است؛ دوباره پلن را انتخاب کنید."); return; }
   const wc = data.match(/^wc:(\d{4,9})$/);
   if (wc) { await answer(); return startTopup(env, db, chatId, String(cq.from.id), Number(wc[1])); }
   if (data === "menu:wallet") { await answer(); return sendWallet(env, db, chatId, String(cq.from.id), ""); }
@@ -832,9 +848,53 @@ async function adminPanelMenu(env, db, chatId, origin) {
     reply_markup: { inline_keyboard: [
       [{ text: "🖥 باز کردن پنل", url: origin + "/admin.html" }],
       [{ text: "🔐 ورود خودکار به پنل", url: origin + "/api/admin/tg/auto?t=" + t }],
+      [{ text: "📊 آمار مدیریت", callback_data: "ad:stats:" }, { text: "👥 کاربران", callback_data: "ad:users:" }],
+      [{ text: "🛒 سفارش‌های سرور", callback_data: "ad:orders:" }],
       [{ text: "🎫 تیکت‌های باز", callback_data: "tk:l:o" }],
     ] },
   }).catch(() => {});
+}
+
+// ابزار مدیریت در ربات؛ هر ورودی و callback قبل از رسیدن به این توابع ادمین را کنترل می‌کند.
+async function adminBotAction(env, db, chatId, action, arg) {
+  if (action === "stats") {
+    const [users, tickets, receipts, orders, subs] = await db.batch([
+      db.prepare("SELECT COUNT(*) n FROM users"), db.prepare("SELECT COUNT(*) n FROM tickets WHERE status='open'"),
+      db.prepare("SELECT COUNT(*) n FROM receipts WHERE status='pending'"),
+      db.prepare("SELECT COUNT(*) n FROM server_orders WHERE status IN ('pending','approved')"),
+      db.prepare("SELECT COUNT(*) n FROM subs WHERE until>?").bind(Date.now()),
+    ]);
+    const n = x => (x.results && x.results[0] ? x.results[0].n : 0);
+    return tg(env, "sendMessage", { chat_id: chatId, text: `📊 آمار مدیریت\n👥 کاربران: ${fa(n(users))}\n⭐ اشتراک فعال: ${fa(n(subs))}\n🎫 تیکت باز: ${fa(n(tickets))}\n🧾 رسید در انتظار: ${fa(n(receipts))}\n🛒 سفارش سرور باز: ${fa(n(orders))}` });
+  }
+  if (action === "users") {
+    const rows = (await db.prepare("SELECT tg_id FROM users ORDER BY created DESC LIMIT 10").all()).results || [];
+    return tg(env, "sendMessage", { chat_id: chatId, text: "👥 آخرین کاربران؛ برای جستجوی شناسه عددی هم بفرستید:\n/user 123456789",
+      reply_markup: { inline_keyboard: rows.map(r => [{ text: `👤 ${r.tg_id}`, callback_data: `ad:user:${r.tg_id}` }]) } });
+  }
+  if (action === "user") return adminBotUser(env, db, chatId, arg);
+  if (action === "orders") {
+    const rows = (await db.prepare("SELECT id,tg_id,product,amount,status FROM server_orders WHERE status IN ('pending','approved') ORDER BY id DESC LIMIT 15").all()).results || [];
+    return tg(env, "sendMessage", { chat_id: chatId, text: rows.length ? "🛒 سفارش‌های باز سرور (۱۵ مورد اخیر):" : "🛒 سفارش باز سرور وجود ندارد.",
+      reply_markup: { inline_keyboard: rows.map(r => [{ text: `#${r.id} • ${SERVER_PRODUCTS[r.product]?.name || r.product} • ${r.status === 'approved' ? 'آماده تحویل' : 'بررسی رسید'}`, callback_data: `ad:order:${r.id}` }]) } });
+  }
+  if (action === "order") {
+    const o = await db.prepare("SELECT * FROM server_orders WHERE id=?").bind(Number(arg)).first();
+    if (!o) return tg(env, "sendMessage", { chat_id: chatId, text: "سفارش پیدا نشد." });
+    let note = o.status === 'approved' ? "✅ آماده تحویل" : o.status === 'pending' ? "⏳ در انتظار تأیید رسید" : o.status;
+    if (o.status === 'approved' && !o.admin_msg_id && o.payment_token) note += (await sendWalletOrderToAdmin(env, db, o)) ? "\nپیام تحویل دوباره ارسال شد." : "\n⚠️ ارسال پیام تحویل ناموفق بود؛ دوباره تلاش کنید.";
+    return tg(env, "sendMessage", { chat_id: chatId, text: `🛒 سفارش #${o.id}\n🆔 مشتری: ${o.tg_id}\n${serverDetails(o)}\nوضعیت: ${note}\n\nبرای رسیدهای کارت‌به‌کارت از پیام رسید اولیه استفاده کنید.` });
+  }
+}
+async function adminBotUser(env, db, chatId, id) {
+  if (!/^\d{3,20}$/.test(String(id))) return;
+  const u = await db.prepare("SELECT tg_id,created FROM users WHERE tg_id=?").bind(String(id)).first();
+  if (!u) return tg(env, "sendMessage", { chat_id: chatId, text: "کاربر پیدا نشد." });
+  const sub = await db.prepare("SELECT until FROM subs WHERE tg_id=?").bind(String(id)).first();
+  const ban = await db.prepare("SELECT reason FROM bans WHERE tg_id=?").bind(String(id)).first();
+  const balance = await walletBalance(db, id);
+  const expiry = sub && sub.until > Date.now() ? new Date(sub.until).toLocaleDateString("fa-IR", { timeZone: "Asia/Tehran" }) : "غیرفعال";
+  return tg(env, "sendMessage", { chat_id: chatId, text: `👤 کاربر ${id}\n⭐ اشتراک: ${expiry}\n💼 موجودی: ${fa(balance)} تومان\n🚫 وضعیت: ${ban ? "مسدود" : "فعال"}\n\nبرای تغییر موجودی، اشتراک یا وضعیت از پنل وب استفاده کنید.` });
 }
 
 // GET /api/admin/tg/auto?t=…  → سشن ادمین + هدایت به پنل (فقط توکنی که ربات برای ADMIN_TG_ID ساخته)
@@ -1089,7 +1149,11 @@ async function serverInvoice(env, db, chatId, tgId, token) {
   const d = await db.prepare("SELECT * FROM server_drafts WHERE tg_id=? AND token=? AND stage='receipt'").bind(tgId, token).first();
   if (!d) return;
   const st = await getSettings(db);
-  return tg(env, "sendMessage", { chat_id: chatId, text: `🧾 صورت‌حساب سفارش سرور\n━━━━━━━━━━━━━━━━\n${serverDetails(d)}\n━━━━━━━━━━━━━━━━\n\n${st.pay_text}\n\nپس از پرداخت، عکس رسید را همین‌جا ارسال کنید. پس از تأیید، پشتیبانی سرویس را دستی تحویل می‌دهد.` });
+  await db.prepare("INSERT OR IGNORE INTO wallet_quotes(token,tg_id,kind,amount,created) VALUES(?,?,'server',?,?)").bind(token, tgId, d.amount, Date.now()).run();
+  const balance = await walletBalance(db, tgId);
+  return tg(env, "sendMessage", { chat_id: chatId, text: `🧾 صورت‌حساب سفارش سرور\n━━━━━━━━━━━━━━━━\n${serverDetails(d)}\n━━━━━━━━━━━━━━━━\n💼 موجودی کیف پول: ${fa(balance)} تومان\n\n${st.pay_text}\n\nبا کیف پول کل مبلغ را پرداخت کنید یا بعد از پرداخت کارت‌به‌کارت عکس رسید را بفرستید. تحویل توسط پشتیبانی دستی است.`,
+    reply_markup: { inline_keyboard: [[{ text: "💼 پرداخت کامل با کیف پول", callback_data: `wp:${token}` }]] },
+  });
 }
 async function serverReceipt(env, db, msg) {
   const tgId = String(msg.from.id), chatId = msg.chat.id;
@@ -1234,7 +1298,7 @@ async function choosePlan(env, db, chatId, tgId, key) {
   const st = await getSettings(db);
   const plan = st.plans.find((p) => p.key === key);
   if (!plan) return reply("این پلن دیگه وجود نداره. دوباره /plans رو بفرست.");
-  await db.prepare("INSERT INTO pending_buy(tg_id,plan,code,ts) VALUES(?,?,NULL,?) ON CONFLICT(tg_id) DO UPDATE SET plan=excluded.plan, ts=excluded.ts, topup=0")
+  await db.prepare("INSERT INTO pending_buy(tg_id,plan,code,ts) VALUES(?,?,NULL,?) ON CONFLICT(tg_id) DO UPDATE SET plan=excluded.plan, ts=excluded.ts, topup=0, use_wallet=0")
     .bind(tgId, key, Date.now()).run();
   const row = await pendingCode(db, tgId);
   const price = priceAfter(plan, row);
@@ -1263,18 +1327,22 @@ async function handleReceipt(env, db, msg) {
   if (open.n >= 3) return reply("⏳ سه رسید قبلی‌ت هنوز بررسی نشدن. لطفاً صبر کن.");
 
   const st = await getSettings(db);
-  const pend = await db.prepare("SELECT plan,code,use_wallet,topup FROM pending_buy WHERE tg_id=? AND ts>?").bind(tgId, Date.now() - PENDING_MS).first();
-  const isTopup = !!(pend && pend.topup > 0);
-  const plan = !isTopup && pend && pend.plan ? st.plans.find((p) => p.key === pend.plan) || null : null;
-  const codeRow = isTopup ? null : await pendingCode(db, tgId);
+  const pend = await db.prepare("SELECT plan,code,use_wallet,topup,ts FROM pending_buy WHERE tg_id=? AND ts>?").bind(tgId, Date.now() - PENDING_MS).first();
+  if (!pend || (!pend.plan && !(pend.topup > 0))) return reply("⚠️ ابتدا پلن اشتراک یا مبلغ شارژ را انتخاب کنید و سپس رسید بفرستید.");
+  const isTopup = !!(pend.topup > 0);
+  const plan = !isTopup && pend.plan ? st.plans.find((p) => p.key === pend.plan) || null : null;
+  if (!isTopup && !plan) return reply("⚠️ پلن انتخاب‌شده معتبر نیست؛ دوباره پلن را انتخاب کنید.");
+  // گرفتن اتمیک پیش‌نویس مانع تأیید هم‌زمان رسید و پرداخت کیف پول می‌شود.
+  const claimed = await db.prepare("DELETE FROM pending_buy WHERE tg_id=? AND ts=? AND plan IS ? AND topup IS ?").bind(tgId, pend.ts, pend.plan, pend.topup).run();
+  if (!claimed.meta.changes) return reply("⚠️ این سفارش تغییر کرده یا قبلاً پرداخت شده است؛ دوباره انتخاب کنید.");
+  const codeRow = isTopup ? null : await activeCode(db, pend.code);
   const amount = isTopup ? Number(pend.topup) : plan ? priceAfter(plan, codeRow) : null;
-  const walletUsed = plan && pend.use_wallet ? Math.min(await walletBalance(db, tgId), amount) : 0;
+  const walletUsed = 0; // پرداخت ترکیبی برای سفارش‌های جدید پشتیبانی نمی‌شود.
   const photo = msg.photo[msg.photo.length - 1];
 
   const ins = await db.prepare("INSERT INTO receipts(tg_id,ts,file_id,plan,amount,code,status,wallet_used,kind) VALUES(?,?,?,?,?,?,'pending',?,?)")
     .bind(tgId, Date.now(), photo.file_id, plan ? plan.key : null, amount, codeRow ? codeRow.code : null, walletUsed, isTopup ? "wallet" : "sub").run();
   const id = ins.meta.last_row_id;
-  await db.prepare("DELETE FROM pending_buy WHERE tg_id=?").bind(tgId).run();
 
   const name = [from.first_name, from.last_name].filter(Boolean).join(" ");
   const caption = isTopup ? `💼 شارژ کیف پول #${id}\n👤 ${name || "-"}${from.username ? " (@" + from.username + ")" : ""}\n🆔 ${tgId}\n💰 مبلغ: ${fa(amount)} تومان\n\nبعد از بررسی رسید، مبلغ به کیف پول کاربر اضافه می‌شه:` : `🧾 رسید #${id}\n👤 ${name || "-"}${from.username ? " (@" + from.username + ")" : ""}\n🆔 ${tgId}\n📦 پلن: ${plan ? `${plan.name} (${fa(plan.days)} روز)` : "انتخاب نشده"}\n💰 مبلغ: ${amount !== null ? fa(amount) + " تومان" : "—"}${codeRow ? "\n🎟 کد: " + codeRow.code : ""}\n\nیکی از پلن‌ها رو برای تأیید بزن:`;
@@ -1287,6 +1355,8 @@ async function handleReceipt(env, db, msg) {
   const r = await tg(env, "sendPhoto", { chat_id: env.ADMIN_TG_ID, photo: photo.file_id, caption, reply_markup: kb }).catch(() => ({ ok: false }));
   if (!r.ok) {
     await db.prepare("DELETE FROM receipts WHERE id=?").bind(id).run();
+    await db.prepare("INSERT OR IGNORE INTO pending_buy(tg_id,plan,code,ts,use_wallet,topup) VALUES(?,?,?,?,?,?)")
+      .bind(tgId, pend.plan, pend.code, pend.ts, 0, pend.topup).run();
     return reply("⚠️ رسیدت ارسال نشد. چند دقیقه دیگه دوباره بفرست.");
   }
   return reply(isTopup
@@ -2740,32 +2810,63 @@ async function walletDebit(db, tgId, amount, reason) {
   return true;
 }
 
-// پیشنهاد استفاده از اعتبار بعد از انتخاب پلن (فقط وقتی موجودی داره)
-async function walletOffer(env, db, chatId, tgId, plan, row) {
-  const bal = await walletBalance(db, tgId);
-  if (bal <= 0) return;
-  const pend = await db.prepare("SELECT use_wallet FROM pending_buy WHERE tg_id=?").bind(String(tgId)).first();
-  const using = !!(pend && pend.use_wallet);
-  const price = priceAfter(plan, row);
-  const applied = Math.min(bal, price);
-  const text = using
-    ? `🎁 از اعتبارت استفاده می‌شه: ${fa(applied)} تومان.\nمبلغ قابل پرداخت: ${fa(price - applied)} تومان.`
-    : `🎁 اعتبار هدیه داری: ${fa(bal)} تومان.\nاگه می‌خوای ازش استفاده کنی، دکمه‌ی زیر رو بزن.`;
-  const btn = using
-    ? { text: "↩️ بدون استفاده از اعتبار", callback_data: "wal:0" }
-    : { text: `🎁 استفاده از اعتبار (${fa(applied)} تومان)`, callback_data: "wal:1" };
-  return tg(env, "sendMessage", { chat_id: chatId, text, reply_markup: { inline_keyboard: [[btn]] } }).catch(() => {});
+// همه تغییرات مالی یک تراکنش D1 هستند؛ توکن یکتا از کسر دوباره جلوگیری می‌کند.
+async function payWallet(env, db, chatId, tgId, token) {
+  const reply = text => tg(env, "sendMessage", { chat_id: chatId, text }).catch(() => {});
+  if (await isBanned(db, tgId)) return reply("⛔ دسترسی شما مسدود است.");
+  const q = await db.prepare("SELECT * FROM wallet_quotes WHERE token=? AND tg_id=?").bind(token, tgId).first();
+  if (!q) return reply("⚠️ این صورت‌حساب معتبر نیست؛ دوباره خرید را شروع کنید.");
+  if (q.kind === "server" && !adminTgId(env)) return reply("⚠️ پشتیبانی تنظیم نشده؛ پرداخت انجام نشد.");
+  const now = Date.now();
+  const active = "EXISTS(SELECT 1 FROM wallet_payments WHERE token=? AND status='processing')";
+  const results = await db.batch([
+    db.prepare("INSERT OR IGNORE INTO wallet(tg_id,balance) VALUES(?,0)").bind(tgId),
+    db.prepare(`INSERT OR IGNORE INTO wallet_payments(token,tg_id,kind,amount,status,created)
+      SELECT q.token,q.tg_id,q.kind,q.amount,'processing',? FROM wallet_quotes q
+      WHERE q.token=? AND q.tg_id=? AND q.created>? AND q.amount>=0
+      AND (SELECT balance FROM wallet WHERE tg_id=q.tg_id)>=q.amount
+      AND ((q.kind='server' AND EXISTS(SELECT 1 FROM server_drafts d WHERE d.tg_id=q.tg_id AND d.token=q.token AND d.stage='receipt' AND d.created>? AND d.amount=q.amount))
+        OR (q.kind='sub' AND EXISTS(SELECT 1 FROM pending_buy p WHERE p.tg_id=q.tg_id AND p.plan=q.plan AND p.ts=q.pending_ts AND p.ts>? AND COALESCE(p.code,'')=COALESCE(q.code,''))
+          AND (q.code IS NULL OR EXISTS(SELECT 1 FROM discount_codes c WHERE c.code=q.code AND c.active=1 AND c.percent=q.percent AND (c.expires IS NULL OR c.expires=0 OR c.expires>?) AND (c.max_uses=0 OR c.used<c.max_uses)))))`)
+      .bind(now, token, tgId, now-PENDING_MS, now-SERVER_DRAFT_MS, now-PENDING_MS, now),
+    db.prepare(`UPDATE wallet SET balance=balance-? WHERE tg_id=? AND ${active}`).bind(q.amount, tgId, token),
+    db.prepare(`INSERT INTO wallet_log(tg_id,ts,delta,reason) SELECT ?,?,?,? WHERE ${active}`).bind(tgId, now, -q.amount, `خرید ${q.kind} #${token}`, token),
+    db.prepare(`INSERT INTO subs(tg_id,until) SELECT ?,? WHERE ${active} AND ?='sub'
+      ON CONFLICT(tg_id) DO UPDATE SET until=MAX(subs.until,?)+?`).bind(tgId, now+(q.days || 0)*86400000, token, q.kind, now, (q.days || 0)*86400000),
+    db.prepare(`UPDATE discount_codes SET used=used+1 WHERE code=? AND ${active} AND ?='sub'`).bind(q.code, token, q.kind),
+    db.prepare(`INSERT INTO server_orders(tg_id,product,volume,days,users,amount,file_id,status,created,payment_token)
+      SELECT d.tg_id,d.product,d.volume,d.days,d.users,d.amount,'','approved',?,? FROM server_drafts d WHERE d.tg_id=? AND d.token=? AND d.stage='receipt' AND ${active}`)
+      .bind(now, token, tgId, token, token),
+    db.prepare(`DELETE FROM server_drafts WHERE tg_id=? AND token=? AND ${active}`).bind(tgId, token, token),
+    db.prepare(`DELETE FROM pending_buy WHERE tg_id=? AND ts=? AND ${active} AND ?='sub'`).bind(tgId, q.pending_ts, token, q.kind),
+    db.prepare("UPDATE wallet_payments SET status='paid' WHERE token=? AND status='processing'").bind(token),
+  ]);
+  if (!results[1].meta.changes) return reply("⚠️ پرداخت انجام نشد: موجودی کافی نیست یا صورت‌حساب/کد تخفیف منقضی یا قبلاً پرداخت شده است. دوباره خرید را شروع کنید.");
+  if (q.kind === "sub") return reply(`✅ اشتراک شما با کیف پول پرداخت و فعال شد. مبلغ: ${fa(q.amount)} تومان.`);
+  const order = await db.prepare("SELECT * FROM server_orders WHERE payment_token=?").bind(token).first();
+  if (order) {
+    const sent = await sendWalletOrderToAdmin(env, db, order);
+    return reply(`✅ مبلغ ${fa(q.amount)} تومان از کیف پول کسر شد. سفارش سرور #${order.id} ثبت شد و پشتیبانی آن را دستی تحویل می‌دهد.${sent ? "" : "\n⚠️ ارسال اعلان به ادمین ناموفق بود؛ سفارش در بخش سفارش‌های پنل مدیریت ثبت است."}`);
+  }
+}
+async function sendWalletOrderToAdmin(env, db, order) {
+  if (order.admin_msg_id) return true;
+  const text = `🧾 سفارش سرور #${order.id} — پرداخت کامل با کیف پول\n🆔 مشتری: ${order.tg_id}\n${serverDetails(order)}\n\nپرداخت انجام شده است. برای تحویل دستی، فایل‌ها را با Reply به همین پیام بفرستید و بعد «تحویل داده شد» را بزنید.`;
+  const sent = await tg(env, "sendMessage", { chat_id: adminTgId(env), text, reply_markup: { inline_keyboard: [[{ text: "📦 تحویل داده شد", callback_data: `sd:d:${order.id}` }]] } }).catch(() => ({ ok: false }));
+  if (!sent.ok || !sent.result?.message_id) return false;
+  await db.prepare("UPDATE server_orders SET admin_msg_id=? WHERE id=? AND admin_msg_id IS NULL").bind(sent.result.message_id, order.id).run();
+  return true;
 }
 
-async function setWallet(env, db, chatId, tgId, on) {
-  const reply = (t) => tg(env, "sendMessage", { chat_id: chatId, text: t }).catch(() => {});
-  const pend = await db.prepare("SELECT plan FROM pending_buy WHERE tg_id=? AND ts>?").bind(tgId, Date.now() - PENDING_MS).first();
-  if (!pend || !pend.plan) return reply("اول پلن رو از /plans انتخاب کن.");
-  const st = await getSettings(db);
-  const plan = st.plans.find((p) => p.key === pend.plan);
-  if (!plan) return reply("این پلن دیگه وجود نداره. دوباره /plans رو بفرست.");
-  await db.prepare("UPDATE pending_buy SET use_wallet=? WHERE tg_id=?").bind(on ? 1 : 0, tgId).run();
-  return walletOffer(env, db, chatId, tgId, plan, await pendingCode(db, tgId));
+// پرداخت اشتراک فقط به صورت کامل؛ هر دکمه به پیش‌فاکتور و زمان انتخاب پلن محدود است.
+async function walletOffer(env, db, chatId, tgId, plan, row) {
+  const pend = await db.prepare("SELECT ts FROM pending_buy WHERE tg_id=? AND plan=?").bind(tgId, plan.key).first();
+  if (!pend) return;
+  const token = randHex(8), amount = priceAfter(plan, row), balance = await walletBalance(db, tgId);
+  await db.prepare("INSERT INTO wallet_quotes(token,tg_id,kind,amount,plan,days,code,percent,pending_ts,created) VALUES(?,?,'sub',?,?,?,?,?,?,?)")
+    .bind(token, tgId, amount, plan.key, plan.days, row ? row.code : null, row ? row.percent : null, pend.ts, Date.now()).run();
+  return tg(env, "sendMessage", { chat_id: chatId, text: `💼 موجودی کیف پول: ${fa(balance)} تومان\n💰 مبلغ کامل: ${fa(amount)} تومان\nپرداخت ترکیبی امکان‌پذیر نیست.`,
+    reply_markup: { inline_keyboard: [[{ text: "💼 پرداخت کامل با کیف پول", callback_data: `wp:${token}` }]] } }).catch(() => {});
 }
 
 async function adminWallets(env) {
