@@ -1,0 +1,247 @@
+<!DOCTYPE html>
+<html lang="fa" dir="rtl">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
+<meta name="robots" content="noindex"/>
+<meta name="theme-color" content="#070B1A"/>
+<link rel="manifest" href="/manifest.webmanifest"/>
+<link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
+<title>راهنما و سوالات • IMRC | Help &amp; FAQ</title>
+<style>
+  :root{--bg:#070B1A;--card:#0E1530;--line:#1d2a4f;--tx:#E8EEFF;--dim:#8a97bd;--ac:#00E5FF}
+  *{box-sizing:border-box}
+  body{margin:0;min-height:100vh;background:var(--bg);color:var(--tx);font-family:Vazirmatn,system-ui,sans-serif;padding:20px 16px 48px;line-height:1.9}
+  .wrap{max-width:640px;margin:0 auto}
+  .top{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:6px}
+  h1{font-size:21px;margin:0}
+  h2{font-size:17px;margin:26px 0 8px;color:var(--ac)}
+  h3{font-size:15px;margin:14px 0 4px}
+  p,li{font-size:14.5px;color:var(--tx)}
+  .sub{color:var(--dim);font-size:13px}
+  .card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin-top:10px}
+  ol,ul{padding-inline-start:20px;margin:6px 0}
+  li{margin:4px 0}
+  code{direction:ltr;unicode-bidi:isolate;background:#0a1128;border:1px solid var(--line);border-radius:6px;padding:1px 6px;font-size:13px}
+  .lang{background:transparent;color:var(--tx);border:1px solid var(--line);border-radius:10px;padding:6px 12px;font:inherit;cursor:pointer;white-space:nowrap}
+  .nav{display:flex;gap:8px;flex-wrap:wrap;margin:12px 0 4px}
+  .nav a{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:7px 12px;color:var(--ac);text-decoration:none;font-size:13.5px}
+  details{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:12px 14px;margin-top:8px}
+  summary{cursor:pointer;font-weight:700;font-size:14.5px}
+  details p{margin:8px 0 0;color:var(--dim)}
+  details[open] summary{color:var(--ac)}
+  .warn{border-color:#ffb347}
+  /* دو زبان: فقط بلوک زبان فعال نمایش داده می‌شه */
+  html:not([lang="en"]) .en{display:none}
+  html[lang="en"] .fa{display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <div class="top">
+    <h1><span class="fa">راهنما و سوالات</span><span class="en">Help &amp; FAQ</span></h1>
+    <button class="lang" id="langBtn" type="button" onclick="toggleLang()">English</button>
+  </div>
+  <div class="sub"><span class="fa">نصب پنل روی گوشی، ساخت و وصل کردن کانفیگ، و جواب سوال‌های رایج.</span><span class="en">Install the panel on your phone, import your config, and common questions.</span></div>
+  <div id="envWarn" class="card warn" style="display:none">
+    <div class="fa">این صفحه داخل مرورگر برنامه‌ی دیگری (مثل تلگرام یا اینستاگرام) باز شده. برای نصب روی گوشی، لینک را در <b>Safari</b> (آیفون) یا <b>Chrome</b> (اندروید) باز کن.</div>
+    <div class="en">This page is open inside another app’s browser (Telegram, Instagram…). To install on your phone, open the link in <b>Safari</b> (iPhone) or <b>Chrome</b> (Android).</div>
+  </div>
+  <div class="nav">
+    <a href="/"><span class="fa">بازگشت به پنل</span><span class="en">Back to panel</span></a>
+    <a href="/status.html"><span class="fa">وضعیت سرویس</span><span class="en">Service status</span></a>
+  </div>
+
+  <!-- ===== به چه دردی می‌خوره ===== -->
+  <h2><span class="fa">این پنل به چه دردی می‌خوره؟</span><span class="en">What is this panel for?</span></h2>
+  <div class="card">
+    <ul class="fa">
+      <li><b>کانفیگ WireGuard آماده</b>: کشور، حالت بازی و تنظیمات رو انتخاب می‌کنی و فایل آماده‌ی وصل شدن می‌گیری.</li>
+      <li><b>سرور با پینگ زنده</b>: کشورها با پینگ فعلی نشون داده می‌شن تا سرور مناسب‌تر رو انتخاب کنی.</li>
+      <li><b>تست شبکه</b>: پینگ، جیتر و درصد افت بسته رو اندازه بگیر و قبل و بعد از اتصال مقایسه کن.</li>
+      <li><b>ابزارهای بازی</b>: شمارنده‌ی مچ، محاسبه‌ی TTK، چک‌لیست لودات، تمرین هدف‌گیری و تست واکنش.</li>
+      <li><b>سابقه و ساخت مجدد</b>: کانفیگ‌های قبلی رو ببین، فایلشون رو ۳۰ روز دوباره دانلود کن یا با همان تنظیمات بساز.</li>
+      <li><b>ربات تلگرام</b>: همان امکانات ساخت کانفیگ رو در ربات داری و فایل رو همان‌جا می‌گیری.</li>
+    </ul>
+    <ul class="en">
+      <li><b>Ready WireGuard configs</b>: pick a region, game mode and settings, and get a file ready to import.</li>
+      <li><b>Live server ping</b>: regions are shown with their current ping so you can choose a better one.</li>
+      <li><b>Network test</b>: measure ping, jitter and packet loss, and compare before and after connecting.</li>
+      <li><b>Game tools</b>: kill/death counter, TTK calculator, loadout checklist, aim training and reaction test.</li>
+      <li><b>History and rebuild</b>: review past configs, download their file again for 30 days, or rebuild with the same settings.</li>
+      <li><b>Telegram bot</b>: the same config builder is available in the bot, and the file is sent there.</li>
+    </ul>
+    <p class="sub"><span class="fa">این سرویس یک کانفیگ WireGuard می‌سازه و خودش وصل نمی‌کنه؛ اتصال با اپ رسمی WireGuard انجام می‌شه. بهبود پینگ به شبکه‌ی خودت هم بستگی داره و تضمین نمی‌شه.</span><span class="en">This service builds a WireGuard config; the connection is made with the official WireGuard app. Ping improvement also depends on your own network and is not guaranteed.</span></p>
+  </div>
+
+  <!-- ===== نصب روی گوشی ===== -->
+  <h2><span class="fa">۱. نصب پنل روی گوشی (اپ)</span><span class="en">1. Install the panel on your phone</span></h2>
+  <div class="card">
+    <h3><span class="fa">اندروید (Chrome)</span><span class="en">Android (Chrome)</span></h3>
+    <ol class="fa">
+      <li>پنل رو در Chrome باز کن.</li>
+      <li>منوی ⋮ (سه نقطه‌ی بالا) رو بزن.</li>
+      <li>«نصب برنامه» یا «افزودن به صفحه اصلی» رو انتخاب کن.</li>
+    </ol>
+    <ol class="en">
+      <li>Open the panel in Chrome.</li>
+      <li>Tap the ⋮ menu (top right).</li>
+      <li>Choose “Install app” or “Add to Home screen”.</li>
+    </ol>
+    <h3><span class="fa">آیفون (Safari)</span><span class="en">iPhone (Safari)</span></h3>
+    <ol class="fa">
+      <li>حتماً با <b>Safari</b> باز کن. مرورگر داخلی تلگرام یا اینستاگرام این قابلیت رو نداره.</li>
+      <li>دکمه‌ی Share (مربع با فلش رو به بالا) رو بزن.</li>
+      <li>«Add to Home Screen» (افزودن به صفحه‌ی اصلی) رو انتخاب کن.</li>
+    </ol>
+    <ol class="en">
+      <li>Open the panel in <b>Safari</b>. In-app browsers (Telegram, Instagram) don’t support this.</li>
+      <li>Tap the Share button (square with an up arrow).</li>
+      <li>Choose “Add to Home Screen”.</li>
+    </ol>
+    <h3><span class="fa">کامپیوتر (Chrome / Edge)</span><span class="en">Computer (Chrome / Edge)</span></h3>
+    <p class="fa">آیکون نصب رو در نوار آدرس بزن، یا از منو گزینه‌ی «نصب IMRC» رو انتخاب کن.</p>
+    <p class="en">Click the install icon in the address bar, or choose “Install IMRC” from the menu.</p>
+  </div>
+
+  <!-- ===== وصل کردن کانفیگ ===== -->
+  <h2 id="connect"><span class="fa">۲. ساخت و وصل کردن کانفیگ</span><span class="en">2. Build and import your config</span></h2>
+  <div class="card">
+    <p class="fa">کانفیگ پنل از نوع <b>WireGuard</b> است. برای وصل شدن باید اپ رسمی WireGuard رو نصب داشته باشی:</p>
+    <p class="en">The panel’s config is in <b>WireGuard</b> format. You need the official WireGuard app to connect:</p>
+    <ul class="fa">
+      <li>اندروید: <a href="https://play.google.com/store/apps/details?id=com.wireguard.android" target="_blank" rel="noopener">WireGuard در Google Play</a></li>
+      <li>آیفون: WireGuard در App Store</li>
+      <li>ویندوز / مک: WireGuard از سایت رسمی wireguard.com</li>
+    </ul>
+    <ul class="en">
+      <li>Android: <a href="https://play.google.com/store/apps/details?id=com.wireguard.android" target="_blank" rel="noopener">WireGuard on Google Play</a></li>
+      <li>iPhone: WireGuard on the App Store</li>
+      <li>Windows / macOS: WireGuard from wireguard.com</li>
+    </ul>
+    <h3><span class="fa">مراحل</span><span class="en">Steps</span></h3>
+    <ol class="fa">
+      <li>در پنل، کشور و تنظیمات رو انتخاب کن و کانفیگ رو بساز. فایل <code>.conf</code> دانلود می‌شه.</li>
+      <li>در اپ WireGuard، گزینه‌ی افزودن تونل و «ساختن از فایل» یا «Import» رو بزن و فایل رو انتخاب کن.</li>
+      <li>کلید کنار تونل رو روشن کن.</li>
+    </ol>
+    <ol class="en">
+      <li>In the panel, pick a region and settings, then build the config. A <code>.conf</code> file downloads.</li>
+      <li>In the WireGuard app, add a tunnel, choose “Create from file” or “Import”, and select the file.</li>
+      <li>Switch the tunnel on.</li>
+    </ol>
+    <p class="fa">اگه فایل دانلود نشد، از دکمه‌ی «کپی کانفیگ» در پنل استفاده کن و متن رو در اپ WireGuard بچسبون.</p>
+    <p class="en">If the file doesn’t download, use “Copy config” in the panel and paste the text into the WireGuard app.</p>
+  </div>
+
+  <!-- ===== عیب‌یابی ===== -->
+  <h2><span class="fa">اگه وصل نشد</span><span class="en">If it won’t connect</span></h2>
+  <div class="card">
+    <ol class="fa">
+      <li>مطمئن شو تونل در اپ WireGuard روشنه و خطایی نشون نمی‌ده.</li>
+      <li>از جدیدترین فایل استفاده کن. اگه فایل بیشتر از ۳۰ روز پیش ساخته شده، کانفیگ جدید بساز.</li>
+      <li>MTU و DNS رو روی پیش‌فرض بذار. اگه تغییر داده بودی، برگردون.</li>
+      <li>کشور دیگه‌ای امتحان کن؛ بعضی سرورها در بعضی شبکه‌ها بهتر جواب می‌دن.</li>
+      <li>ساعت و تاریخ گوشی رو خودکار (Automatic) کن.</li>
+      <li>بین وای‌فای و اینترنت موبایل جابه‌جا شو.</li>
+      <li>اگه بازم نشد، وضعیت سرویس رو ببین و از <b>/support</b> در ربات استفاده کن.</li>
+    </ol>
+    <ol class="en">
+      <li>Make sure the tunnel is switched on in the WireGuard app with no error.</li>
+      <li>Use the newest file. If it was built more than 30 days ago, build a new config.</li>
+      <li>Keep MTU and DNS at the defaults. Revert them if you changed them.</li>
+      <li>Try another region; some servers work better on some networks.</li>
+      <li>Set your phone’s date and time to automatic.</li>
+      <li>Switch between Wi-Fi and mobile data.</li>
+      <li>If it still fails, check the service status and send <b>/support</b> to the bot.</li>
+    </ol>
+  </div>
+
+  <!-- ===== سوالات ===== -->
+  <h2><span class="fa">۳. سوالات رایج</span><span class="en">3. Frequently asked questions</span></h2>
+
+  <details>
+    <summary><span class="fa">چرا باید عضو کانال باشم؟</span><span class="en">Why do I need to join the channel?</span></summary>
+    <p><span class="fa">استفاده از پنل برای اعضای کانال <b>@IMRC_Panel</b> است. اگه از کانال خارج بشی، ساخت کانفیگ موقتاً بسته می‌شه.</span>
+       <span class="en">The panel is for members of <b>@IMRC_Panel</b>. If you leave the channel, building configs is paused until you rejoin.</span></p>
+  </details>
+
+  <details>
+    <summary><span class="fa">چطوری وارد پنل بشم؟</span><span class="en">How do I log in?</span></summary>
+    <p><span class="fa">با حساب تلگرامت. روی «ورود با تلگرام» بزن و تأیید کن. ورود با رمز عبور فقط برای ادمین است.</span>
+       <span class="en">With your Telegram account. Tap “Log in with Telegram” and confirm. Password login is for admins only.</span></p>
+  </details>
+
+  <details>
+    <summary><span class="fa">چرا سقف ساخت کانفیگ دارم؟</span><span class="en">Why is there a limit on configs?</span></summary>
+    <p><span class="fa">کاربران رایگان فقط به چند کشور مشخص و با سقف محدود دسترسی دارن. اشتراک، سقف بیشتر و کشورها و امکانات بیشتری می‌ده. پلن‌ها و قیمت‌ها رو از ربات تلگرام با دستور <b>/plans</b> ببین.</span>
+       <span class="en">Free accounts can use a few countries with a limited number of configs. A subscription raises the limit and unlocks more countries and options. See plans and prices in the Telegram bot with <b>/plans</b>.</span></p>
+  </details>
+
+  <details>
+    <summary><span class="fa">کد تخفیف دارم، کجا وارد کنم؟</span><span class="en">I have a discount code. Where do I enter it?</span></summary>
+    <p><span class="fa">در ربات تلگرام با دستور <b>/code KOD</b> بفرست، قبل از ارسال عکس رسید.</span>
+       <span class="en">Send <b>/code CODE</b> to the Telegram bot before you send your payment receipt.</span></p>
+  </details>
+
+  <details>
+    <summary><span class="fa">رسیدم رو فرستادم، کی فعال می‌شه؟</span><span class="en">I sent my receipt. When is it activated?</span></summary>
+    <p><span class="fa">بعد از بررسی ادمین. وقتی تأیید شد، ربات برات پیام می‌ده و اشتراکت فعال می‌شه. اگه طولانی شد، از دستور <b>/support</b> استفاده کن.</span>
+       <span class="en">After an admin reviews it. The bot messages you when it’s approved and your subscription starts. If it takes too long, use <b>/support</b>.</span></p>
+  </details>
+
+  <details>
+    <summary><span class="fa">تاریخچه‌ی کانفیگ‌هام کجاست؟</span><span class="en">Where is my config history?</span></summary>
+    <p><span class="fa">در پنل، بخش «آمار» و «سابقه‌ی حساب من». آنجا زمان، کشور، حالت بازی و نقش هر کانفیگ دیده می‌شه و با «ساخت مجدد» می‌تونی همان تنظیمات رو دوباره بسازی.</span>
+       <span class="en">In the panel’s Stats tab, under “My account history”. It lists the time, region, mode, and role of each config. “Rebuild” creates a new config with the same settings.</span></p>
+  </details>
+
+  <details class="warn">
+    <summary><span class="fa">کانفیگ‌هام چقدر روی سرور می‌مونه؟</span><span class="en">How long is my config kept on the server?</span></summary>
+    <p><span class="fa">فایل کامل کانفیگ (شامل کلید خصوصی) ۳۰ روز روی حساب تو نگه داشته می‌شه و بعد از ۳۰ روز خودکار حذف می‌شه. در تب «آمار» پنل یا در ربات با <b>/configs</b> می‌تونی دوباره دانلودش کنی. فایل رو با کسی به اشتراک نگذار: هرکسی کلید داشته باشه می‌تونه با اون وصل بشه. کاربر دارای اشتراک فعال، سه روز قبل از حذف هر فایل، یادآوری تلگرام می‌گیرد.</span>
+       <span class="en">The full config file (including its private key) is kept on your account for 30 days, then deleted automatically. You can download it again from the Stats tab in the panel, or with <b>/configs</b> in the bot. Never share the file: anyone with the key can connect with it. Subscribers get a Telegram reminder three days before each file is deleted.</span></p>
+  </details>
+
+  <details>
+    <summary><span class="fa">MTU و DNS چیه؟ باید تغییرشون بدم؟</span><span class="en">What are MTU and DNS? Should I change them?</span></summary>
+    <p><span class="fa">DNS نشونی سرورهایی است که نام سایت‌ها رو به آدرس تبدیل می‌کنه. MTU بیشترین اندازه‌ی هر بسته است. اگه تازه‌کاری، تنظیمات پیش‌فرض رو نگه دار؛ تغییر دلخواه فقط برای کسانی که پینگ یا اتصالشون مشکل دارن لازمه.</span>
+       <span class="en">DNS is the address of the servers that turn site names into addresses. MTU is the largest packet size. If you’re new, keep the defaults. Custom values are only worth trying if your ping or connection has problems.</span></p>
+  </details>
+
+  <details>
+    <summary><span class="fa">سرویس قطعه یا کند شده؛ چیکار کنم؟</span><span class="en">The service seems down or slow. What should I do?</span></summary>
+    <p><span class="fa">اول صفحه‌ی <a href="/status.html">وضعیت سرویس</a> رو ببین. اگه همه‌چیز فعال بود، اینترنت خودت رو چک کن و دوباره وصل شو. اگه مشکل باقی موند، به پشتیبانی پیام بده.</span>
+       <span class="en">First check the <a href="/status.html">service status</a> page. If everything is operational, check your internet and reconnect. If it persists, contact support.</span></p>
+  </details>
+
+  <details>
+    <summary><span class="fa">پشتیبانی</span><span class="en">Support</span></summary>
+    <p><span class="fa">در ربات تلگرام با دستور <b>/support</b> یا دکمه‌ی «پشتیبانی» پیام بده. پشتیبانی مستقیم: <b>@IMRC_support</b></span>
+       <span class="en">Send <b>/support</b> or tap “Support” in the Telegram bot. Direct contact: <b>@IMRC_support</b></span></p>
+  </details>
+</div>
+
+<script>
+(function(){
+  var lang = new URLSearchParams(location.search).get("lang") || localStorage.getItem("IMRC_lang") || "fa";
+  if (lang !== "en") lang = "fa";
+  function setLang(l){
+    lang = l === "en" ? "en" : "fa";
+    localStorage.setItem("IMRC_lang", lang);
+    document.documentElement.lang = lang;
+    document.documentElement.dir = lang === "en" ? "ltr" : "rtl";
+    document.getElementById("langBtn").textContent = lang === "en" ? "فارسی" : "English";
+    document.title = lang === "en" ? "Help & FAQ • IMRC" : "راهنما و سوالات • IMRC";
+  }
+  window.toggleLang = function(){ setLang(lang === "en" ? "fa" : "en") };
+  setLang(lang);
+
+  // هشدار: داخل مرورگر تلگرام/اینستاگرام، یا iPhone با مرورگری غیر از Safari (نصب اپ کار نمی‌کنه)
+  const ua = navigator.userAgent || "";
+  const inApp = /Telegram|Instagram|FBAN|FBAV|Line\/|MicroMessenger|Snapchat/i.test(ua);
+  const iosNotSafari = /iPhone|iPad|iPod/.test(ua) && /CriOS|FxiOS|EdgiOS|OPiOS/.test(ua);
+  if (inApp || iosNotSafari) document.getElementById("envWarn").style.display = "";
+})();
+</script>
+</body>
+</html>
