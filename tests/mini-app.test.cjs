@@ -50,3 +50,67 @@ test('API uses only signed user, denies invalid or banned identities, and report
   response = await context.miniApi(request({ initData, action: 'admin' }), env); assert.equal(response.status, 400);
   block(); response = await context.miniApi(request({ initData, action: 'summary' }), env); assert.equal(response.status, 403);
 });
+
+test('mini app data stays scoped to signed user and file resend checks ownership', async () => {
+  const { DatabaseSync } = require('node:sqlite');
+  const sql = new DatabaseSync(':memory:');
+  sql.exec(`CREATE TABLE server_orders(id INTEGER PRIMARY KEY,tg_id TEXT,product TEXT,volume INTEGER,days INTEGER,users INTEGER,amount INTEGER,status TEXT,created INTEGER);
+    CREATE TABLE server_deliveries(order_id INTEGER,source_chat TEXT,source_message INTEGER,created INTEGER,kind TEXT,file_name TEXT,file_id TEXT);
+    CREATE TABLE wallet_log(id INTEGER PRIMARY KEY,tg_id TEXT,ts INTEGER,delta INTEGER,reason TEXT);
+    CREATE TABLE tickets(id INTEGER PRIMARY KEY,tg_id TEXT,status TEXT);
+    CREATE TABLE ticket_msgs(id INTEGER PRIMARY KEY,ticket_id INTEGER,sender TEXT,text TEXT,ts INTEGER);`);
+  sql.exec("INSERT INTO server_orders VALUES(1,'123','multi',5,30,NULL,75000,'delivered',1),(2,'999','wire',5,30,NULL,100000,'delivered',1); INSERT INTO server_deliveries VALUES(1,'42',11,1,'document','a.conf','file-a'),(2,'42',22,1,'document','b.conf','file-b'); INSERT INTO wallet_log VALUES(1,'123',1,-75000,'server'),(2,'999',1,90000,'private'); INSERT INTO tickets VALUES(1,'123','open'),(2,'999','open'); INSERT INTO ticket_msgs VALUES(1,1,'admin','hello',1),(2,2,'admin','private',1);");
+  const db = { prepare(q) { let args=[]; return { bind(...a) { args=a; return this; }, async first(){ return sql.prepare(q).get(...args) || null; }, async all(){ return { results: sql.prepare(q).all(...args) }; } }; } };
+  const { context } = setup(); context.getDB = async () => db; context.SERVER_PRODUCTS = { multi: { name: 'multi' }, wire: { name: 'wire' } };
+  const copied = []; context.tg = async (env, method, payload) => { copied.push(payload); return { ok: true }; };
+  const initData = signed({ auth_date: now(), user: '{"id":123}' }), env = { BOT_TOKEN: 'test:token' };
+  let r = await context.miniApi(request({ initData, action: 'orders' }), env); let data = await r.json();
+  assert.equal(data.orders.length, 1); assert.equal(data.orders[0].files.length, 1); assert.equal(data.orders[0].files[0].file_name, 'a.conf');
+  r = await context.miniApi(request({ initData, action: 'wallet_history' }), env); data = await r.json(); assert.equal(data.transactions.length, 1); assert.equal(data.transactions[0].reason, 'server');
+  r = await context.miniApi(request({ initData, action: 'tickets' }), env); data = await r.json(); assert.equal(data.messages.length, 1); assert.equal(data.messages[0].text, 'hello');
+  r = await context.miniApi(request({ initData, action: 'delivery_resend', order_id: 2, message_id: 22 }), env); assert.equal(r.status, 404); assert.equal(copied.length, 0);
+  r = await context.miniApi(request({ initData, action: 'delivery_resend', order_id: 1, message_id: 11 }), env); assert.equal(r.status, 200); assert.equal(copied[0].chat_id, '123');
+});
+test('mini config creation uses validated identity and the shared policy engine', async () => {
+  const { context } = setup();
+  context.BOT_COUNTRIES = [{ code: 'tr' }]; context.BOT_MODES = { ranked: 'ranked' }; context.BOT_ROLES = { attacker: 'attacker' }; context.BOT_DNS = [{ v: '' }];
+  let who; context.issueConfig = async (env, sess, body) => { who = sess.tg_id; return { status: 403, body: { error: 'premium', message: 'restricted' } }; };
+  const initData = signed({ auth_date: now(), user: '{"id":123}' });
+  let r = await context.miniApi(request({ initData, action: 'config_create', config: { region: 'tr', mode: 'ranked', role: 'attacker', dns: '', mtu: '1280' }, user_id: 999 }), { BOT_TOKEN: 'test:token' });
+  assert.equal(r.status, 403); assert.equal(who, '123'); assert.equal((await r.json()).message, 'restricted');
+  r = await context.miniApi(request({ initData, action: 'config_create', config: { region: 'xx', mode: 'ranked', role: 'attacker', dns: '', mtu: '' } }), { BOT_TOKEN: 'test:token' }); assert.equal(r.status, 400);
+});
+test('mini support stores ticket and links admin notification for replies', async () => {
+  const { DatabaseSync } = require('node:sqlite'); const sql = new DatabaseSync(':memory:');
+  sql.exec(`CREATE TABLE tickets(id INTEGER PRIMARY KEY AUTOINCREMENT,tg_id TEXT,name TEXT,username TEXT,status TEXT,created INTEGER,updated INTEGER);
+    CREATE TABLE ticket_msgs(id INTEGER PRIMARY KEY AUTOINCREMENT,ticket_id INTEGER,sender TEXT,text TEXT,ts INTEGER,admin_msg_id INTEGER);`);
+  const db = { prepare(q) { let args=[]; return { bind(...a) { args=a; return this; }, async first(){ return sql.prepare(q).get(...args) || null; }, async run(){ const r=sql.prepare(q).run(...args); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } }; } };
+  const { context } = setup(); context.getDB = async () => db; context.adminTgId = env => env.ADMIN_TG_ID; context.TICKET_RATE = { win: 600000, max: 5 };
+  context.tg = async () => ({ ok: true, result: { message_id: 55 } });
+  const initData = signed({ auth_date: now(), user: '{"id":123,"first_name":"Ali"}' });
+  let r = await context.miniApi(request({ initData, action: 'ticket_send', text: 'سلام' }), { BOT_TOKEN: 'test:token', ADMIN_TG_ID: '42' });
+  assert.equal(r.status, 200); assert.equal((await r.json()).notified, true);
+  assert.equal(sql.prepare('SELECT tg_id FROM tickets').get().tg_id, '123');
+  const msg = sql.prepare('SELECT * FROM ticket_msgs').get(); assert.equal(msg.text, 'سلام'); assert.equal(msg.admin_msg_id, 55);
+  r = await context.miniApi(request({ initData, action: 'ticket_send', text: '  ' }), { BOT_TOKEN: 'test:token', ADMIN_TG_ID: '42' }); assert.equal(r.status, 400);
+});
+test('file download errors do not leak bot token or expose another user file', async () => {
+  const { context } = setup();
+  context.getDB = async () => ({ prepare: () => ({ bind() { return this; }, async first() { return { source_chat:'42', source_message:11, kind:'document', file_id:'test', file_name:'file.conf' }; } }) });
+  context.tg = async () => ({ ok:true, result:{file_path:'documents/example.conf',file_size:123} });
+  context.fetch = async () => { throw Error('URL contains secret token'); };
+  const initData = signed({ auth_date: now(), user: '{"id":123}' });
+  const r = await context.miniApi(request({ initData, action:'delivery_file', order_id:1, message_id:11 }), { BOT_TOKEN:'test:token' });
+  assert.equal(r.status, 502); assert(!JSON.stringify(await r.json()).includes('token'));
+});
+test('owned delivery file is returned as a private attachment without exposing token', async () => {
+  const { context } = setup();
+  context.getDB = async () => ({ prepare: () => ({ bind() { return this; }, async first() { return { source_chat:'42', source_message:11, kind:'document', file_id:'test', file_name:'profile.conf' }; } }) });
+  context.tg = async () => ({ ok:true, result:{file_path:'documents/example.conf',file_size:5} });
+  let fetched; context.fetch = async url => { fetched = url; return new Response('hello', { status:200 }); };
+  const initData = signed({ auth_date: now(), user: '{"id":123}' });
+  const r = await context.miniApi(request({ initData, action:'delivery_file', order_id:1, message_id:11 }), { BOT_TOKEN:'test:token' });
+  assert.equal(r.status, 200); assert(fetched.startsWith('https://api.telegram.org/file/bot'));
+  assert.equal(await r.text(), 'hello'); assert.match(r.headers.get('content-disposition'), /profile\.conf/);
+  assert.equal(r.headers.get('cache-control'), 'no-store'); assert(![...r.headers].some(([, value]) => value.includes('test:token')));
+});

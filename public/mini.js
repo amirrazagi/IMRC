@@ -2,75 +2,106 @@
   'use strict';
   const telegram = window.Telegram && window.Telegram.WebApp;
   const initData = telegram && telegram.initData;
-  const message = document.getElementById('message');
-  const messageText = document.getElementById('message-text');
-  const closeApp = document.getElementById('close-app');
+  const $ = id => document.getElementById(id);
   const buttons = [...document.querySelectorAll('.action')];
-  let authenticated = false;
-  function notify(text, canClose = false) {
-    messageText.textContent = text;
-    message.hidden = false;
-    closeApp.hidden = !canClose;
-  }
+  let authenticated = false, busy = false, configText = '', configName = 'IMRC.conf';
+  function notify(text, canClose = false) { $('message-text').textContent = text; $('message').hidden = false; $('close-app').hidden = !canClose; }
   function number(value) { return Number(value || 0).toLocaleString('fa-IR'); }
-  function setBusy(busy) { buttons.forEach(button => { button.disabled = busy || !authenticated; }); }
-  async function api(action) {
-    const response = await fetch('/api/mini', {
-      method: 'POST', credentials: 'omit', cache: 'no-store',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ initData, action }),
-    });
-    const data = await response.json();
-    if (!response.ok) throw new Error(data.error || 'network');
-    return data;
+  function date(value) { return value ? new Date(value).toLocaleDateString('fa-IR', { timeZone: 'Asia/Tehran' }) : '—'; }
+  function setBusy(value) { busy = value; buttons.forEach(b => { b.disabled = value || !authenticated; }); }
+  async function request(action, data = {}, binary = false) {
+    const response = await fetch('/api/mini', { method: 'POST', credentials: 'omit', cache: 'no-store', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ initData, action, ...data }) });
+    if (!response.ok) { const err = await response.json().catch(() => ({})); throw new Error(err.message || err.error || 'network'); }
+    return binary ? response.blob() : response.json();
   }
   function errorMessage(error) {
-    if (error.message === 'banned') return 'دسترسی این حساب مسدود است. برای پیگیری با پشتیبانی تماس بگیر.';
-    if (error.message === 'auth') return 'ورود تلگرام معتبر نیست یا منقضی شده. مینی‌اپ را از ربات دوباره باز کن.';
-    if (error.message === 'rate') return 'درخواست‌ها زیاد شده؛ کمی صبر کن و دوباره تلاش کن.';
-    if (error.message === 'delivery') return 'پیام به چت ربات نرسید. مطمئن شو ربات را مسدود نکرده‌ای و دوباره تلاش کن.';
-    return 'ارتباط برقرار نشد. اتصال اینترنت را بررسی کن و دوباره تلاش کن.';
+    const messages = { banned: 'دسترسی این حساب مسدود است. برای پیگیری با پشتیبانی تماس بگیر.', auth: 'ورود تلگرام معتبر نیست یا منقضی شده. مینی‌اپ را از ربات دوباره باز کن.', rate: 'درخواست‌ها زیاد شده؛ کمی صبر کن و دوباره تلاش کن.', delivery: 'پیام به چت ربات نرسید. مطمئن شو ربات را مسدود نکرده‌ای.', not_available: 'این فایل برای دانلود در دسترس نیست؛ ارسال مجدد به ربات را امتحان کن.', network: 'ارتباط برقرار نشد. اتصال اینترنت را بررسی کن.' };
+    return messages[error.message] || error.message || messages.network;
   }
-  document.querySelectorAll('.nav-item').forEach(button => {
-    button.addEventListener('click', () => {
-      document.querySelectorAll('.nav-item').forEach(item => {
-        item.classList.toggle('active', item === button);
-        if (item === button) item.setAttribute('aria-current', 'page'); else item.removeAttribute('aria-current');
-      });
-      document.querySelectorAll('.screen').forEach(screen => {
-        const selected = screen.id === button.dataset.tab;
-        screen.hidden = !selected;
-        screen.classList.toggle('active', selected);
-      });
-      window.scrollTo({ top: 0, behavior: 'smooth' });
-    });
-  });
-  closeApp.addEventListener('click', () => { if (telegram) telegram.close(); });
+  function element(tag, text, className) { const el = document.createElement(tag); if (text != null) el.textContent = text; if (className) el.className = className; return el; }
+  function empty(container, text) { container.replaceChildren(element('div', text, 'empty-state')); }
+  function showScreen(id) {
+    document.querySelectorAll('.screen').forEach(screen => { const active = screen.id === id; screen.hidden = !active; screen.classList.toggle('active', active); });
+    document.querySelectorAll('.nav-item').forEach(item => { const active = item.dataset.tab === id || (['orders','history'].includes(id) && item.dataset.tab === 'account') || (['support','generator'].includes(id) && item.dataset.tab === 'home'); item.classList.toggle('active', active); if (active) item.setAttribute('aria-current','page'); else item.removeAttribute('aria-current'); });
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+    if (authenticated) {
+      if (id === 'orders') loadOrders();
+      if (id === 'history') loadHistory();
+      if (id === 'support') loadTickets();
+      if (id === 'generator') loadOptions();
+    }
+  }
+  document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => showScreen(button.dataset.tab)));
+  document.querySelectorAll('[data-screen]').forEach(button => button.addEventListener('click', () => showScreen(button.dataset.screen)));
+  $('close-app').addEventListener('click', () => { if (telegram) telegram.close(); });
   buttons.forEach(button => button.addEventListener('click', async () => {
-    if (!authenticated) return;
+    if (!authenticated || busy) return;
     setBusy(true);
-    try {
-      await api(button.dataset.action);
-      notify('آماده‌ست! ادامه این بخش در چت ربات برایت ارسال شد.', true);
-      if (telegram && telegram.HapticFeedback) telegram.HapticFeedback.notificationOccurred('success');
-    } catch (error) { notify(errorMessage(error)); }
-    finally { setBusy(false); }
+    try { await request(button.dataset.action); notify('آماده‌ست! ادامه این بخش در چت ربات برایت ارسال شد.', true); if (telegram?.HapticFeedback) telegram.HapticFeedback.notificationOccurred('success'); }
+    catch (error) { notify(errorMessage(error)); } finally { setBusy(false); }
   }));
+  function download(blob, name) { const url = URL.createObjectURL(blob); const link = element('a'); link.href = url; link.download = name; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
+  async function loadOrders() {
+    const box = $('orders-content'); empty(box, 'در حال دریافت سفارش‌ها...');
+    try {
+      const data = await request('orders'); box.replaceChildren();
+      if (!data.orders.length) return empty(box, 'هنوز سفارشی ثبت نشده است.');
+      const statuses = { pending: 'در انتظار بررسی پرداخت', approved: 'پرداخت تأیید شده · آماده تحویل', delivered: 'تحویل داده شده', rejected: 'رسید رد شده', sending: 'در حال ثبت' };
+      data.orders.forEach(order => {
+        const card = element('article', null, 'detail-card');
+        card.append(element('h2', `${order.product_name} · #${number(order.id)}`), element('span', statuses[order.status] || 'در حال بررسی', 'status-pill'));
+        const detail = order.product === 'unlimited' ? `نامحدود · ${number(order.users)} کاربر` : `${number(order.volume)} گیگابایت`;
+        card.append(element('p', `${detail} · ${number(order.days)} روز · ${number(order.amount)} تومان`), element('p', `تاریخ سفارش: ${date(order.created)}`));
+        if (order.files.length) {
+          const files = element('div', null, 'line'); files.append(element('p', 'فایل‌ها و پیام‌های تحویلی'));
+          order.files.forEach(file => {
+            files.append(element('p', file.file_name || (file.kind === 'text' ? 'پیام متنی' : 'فایل قدیمی · ارسال مجدد به ربات')));
+            if (file.downloadable) { const b = element('button', 'دانلود فایل ↓'); b.type = 'button'; b.addEventListener('click', async () => { b.disabled = true; try { const blob = await request('delivery_file', { order_id: order.id, message_id: file.source_message }, true); download(blob, file.file_name || 'file'); } catch (e) { notify(errorMessage(e)); } finally { b.disabled = false; } }); files.append(b); }
+            const resend = element('button', 'ارسال به چت ↗'); resend.type = 'button'; resend.addEventListener('click', async () => { resend.disabled = true; try { await request('delivery_resend', { order_id: order.id, message_id: file.source_message }); notify('فایل یا پیام به چت ربات ارسال شد.', true); } catch (e) { notify(errorMessage(e)); } finally { resend.disabled = false; } }); files.append(resend);
+          }); card.append(files);
+        } else card.append(element('p', 'هنوز فایلی برای این سفارش ثبت نشده است.', 'line'));
+        box.append(card);
+      });
+    } catch (error) { empty(box, errorMessage(error)); }
+  }
+  async function loadHistory() {
+    const box = $('history-content'); empty(box, 'در حال دریافت تراکنش‌ها...');
+    try { const data = await request('wallet_history'); box.replaceChildren();
+      const balance = element('article', null, 'detail-card'); balance.append(element('h2', `موجودی: ${number(data.balance)} تومان`)); box.append(balance);
+      if (!data.transactions.length) { box.append(element('div', 'هنوز تراکنشی ثبت نشده است.', 'empty-state')); return; }
+      data.transactions.forEach(tx => { const card = element('article', null, 'detail-card'); card.append(element('h2', `${tx.delta >= 0 ? '+' : '−'}${number(Math.abs(tx.delta))} تومان`), element('p', tx.reason || 'تراکنش'), element('p', date(tx.ts))); box.append(card); });
+    } catch (error) { empty(box, errorMessage(error)); }
+  }
+  async function loadTickets() {
+    const box = $('ticket-content'); empty(box, 'در حال دریافت پیام‌ها...');
+    try { const data = await request('tickets'); box.replaceChildren(); if (!data.messages.length) return empty(box, 'هنوز تیکتی نداری؛ از اینجا پیامت را بفرست.');
+      data.messages.forEach(msg => { const div = element('div', null, 'ticket-msg' + (msg.sender === 'admin' ? ' admin' : '')); div.append(element('small', `${msg.sender === 'admin' ? 'پشتیبانی' : 'شما'} · تیکت #${number(msg.ticket_id)} · ${date(msg.ts)}`), document.createTextNode(msg.text)); box.append(div); }); box.scrollTop = box.scrollHeight;
+    } catch (error) { empty(box, errorMessage(error)); }
+  }
+  $('support-refresh').addEventListener('click', () => { if (authenticated) loadTickets(); });
+  $('support-form').addEventListener('submit', async e => { e.preventDefault(); if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); const submit = e.submitter; submit.disabled = true; try { const result = await request('ticket_send', { text: $('support-text').value }); $('support-text').value = ''; await loadTickets(); notify(result.notified ? 'پیامت ثبت شد.' : 'پیامت ثبت شد اما اعلان برای ادمین نرسید؛ پشتیبانی می‌تواند آن را در پنل ببیند.'); } catch (error) { notify(errorMessage(error)); } finally { submit.disabled = false; } });
+  function options(select, values) { select.replaceChildren(); values.forEach(v => { const o = element('option', v.label); o.value = v.value; o.disabled = !!v.locked; select.append(o); }); }
+  async function loadOptions() {
+    try { const data = await request('config_options');
+      options($('cfg-region'), data.countries.map(c => ({ value: c.code, label: `${c.flag} ${c.name}${c.locked ? ' 🔒 اشتراکی' : ''}`, locked: c.locked })));
+      options($('cfg-mode'), Object.entries(data.modes).map(([value,label]) => ({ value,label })));
+      options($('cfg-role'), Object.entries(data.roles).map(([value,label]) => ({ value,label })));
+      options($('cfg-dns'), data.dns.map(d => ({ value: d.value, label: d.label + (d.locked ? ' 🔒 اشتراکی' : ''), locked: d.locked })));
+      options($('cfg-mtu'), data.mtu.map(value => ({ value, label: value || 'بدون MTU' })));
+      $('cfg-custom-mtu').disabled = !data.unlock; $('cfg-custom-mtu').placeholder = data.unlock ? 'مثلاً 1300' : 'نیازمند اشتراک';
+    } catch (error) { notify(errorMessage(error)); }
+  }
+  $('config-form').addEventListener('submit', async e => { e.preventDefault(); if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); const submit = e.submitter; submit.disabled = true;
+    try { const data = await request('config_create', { config: { region: $('cfg-region').value, mode: $('cfg-mode').value, role: $('cfg-role').value, dns: $('cfg-dns').value, mtu: $('cfg-custom-mtu').value || $('cfg-mtu').value, name: $('cfg-name').value } }); configText = data.config; configName = (data.name || 'IMRC').replace(/[^a-zA-Z0-9_-]/g, '') + '.conf'; $('config-output').value = configText; $('config-result').hidden = false; $('config-result').scrollIntoView({ behavior: 'smooth' }); $('quota').textContent = number(data.remaining) + ' / ' + number(data.limit); }
+    catch (error) { notify(errorMessage(error)); } finally { submit.disabled = false; }
+  });
+  $('config-download').addEventListener('click', () => { if (configText) download(new Blob([configText], { type: 'text/plain;charset=utf-8' }), configName); });
   if (telegram) { telegram.ready(); telegram.expand(); }
   setBusy(false);
-  if (!initData) {
-    notify('برای استفاده، مینی‌اپ را از دکمه «مینی‌اپ IMRC» داخل ربات تلگرام باز کن.');
-    return;
-  }
-  api('summary').then(data => {
-    document.getElementById('profile-name').textContent = data.name;
-    document.getElementById('profile-user').textContent = data.username ? '@' + data.username : 'حساب تلگرام';
-    document.getElementById('balance').textContent = number(data.balance);
-    document.getElementById('subscription').textContent = data.sub ? 'فعال ✦' : 'غیرفعال';
-    document.getElementById('subscription-date').textContent = data.sub_until ? 'تا ' + new Date(data.sub_until).toLocaleDateString('fa-IR', { timeZone: 'Asia/Tehran' }) : 'اشتراک فعال نداری';
-    document.getElementById('quota').textContent = number(data.remaining) + ' / ' + number(data.limit);
-    document.getElementById('home-title').textContent = 'سلام ' + data.name + ' ✳';
-    authenticated = true;
-    setBusy(false);
+  if (!initData) { notify('برای استفاده، مینی‌اپ را از دکمه «مینی‌اپ IMRC» داخل ربات تلگرام باز کن.'); return; }
+  request('summary').then(data => {
+    $('profile-name').textContent = data.name; $('profile-user').textContent = data.username ? '@' + data.username : 'حساب تلگرام'; $('balance').textContent = number(data.balance);
+    $('subscription').textContent = data.sub ? 'فعال ✦' : 'غیرفعال'; $('subscription-date').textContent = data.sub_until ? 'تا ' + date(data.sub_until) : 'اشتراک فعال نداری';
+    $('quota').textContent = number(data.remaining) + ' / ' + number(data.limit); $('home-title').textContent = 'سلام ' + data.name + ' ✳'; authenticated = true; setBusy(false);
   }).catch(error => notify(errorMessage(error)));
 })();

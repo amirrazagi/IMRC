@@ -8,7 +8,7 @@ function setup() {
   const sql = new DatabaseSync(':memory:');
   sql.exec(`CREATE TABLE server_drafts(tg_id TEXT PRIMARY KEY, token TEXT, product TEXT, stage TEXT, volume INTEGER, days INTEGER, users INTEGER, amount INTEGER, created INTEGER);
     CREATE TABLE server_orders(id INTEGER PRIMARY KEY AUTOINCREMENT,tg_id TEXT,product TEXT,volume INTEGER,days INTEGER,users INTEGER,amount INTEGER,file_id TEXT,status TEXT,created INTEGER,admin_msg_id INTEGER,decided INTEGER,decided_by TEXT,payment_token TEXT);
-    CREATE TABLE server_deliveries(order_id INTEGER,source_chat TEXT,source_message INTEGER,created INTEGER, PRIMARY KEY(source_chat,source_message));
+    CREATE TABLE server_deliveries(order_id INTEGER,source_chat TEXT,source_message INTEGER,created INTEGER,kind TEXT,file_id TEXT,file_name TEXT, PRIMARY KEY(source_chat,source_message));
     CREATE TABLE wallet_quotes(token TEXT PRIMARY KEY,tg_id TEXT,kind TEXT,amount INTEGER,plan TEXT,days INTEGER,code TEXT,percent INTEGER,pending_ts INTEGER,created INTEGER);
     CREATE TABLE wallet_payments(token TEXT PRIMARY KEY,tg_id TEXT,kind TEXT,amount INTEGER,status TEXT,created INTEGER);
     CREATE TABLE wallet(tg_id TEXT PRIMARY KEY,balance INTEGER); CREATE TABLE wallet_log(tg_id TEXT,ts INTEGER,delta INTEGER,reason TEXT);
@@ -186,4 +186,16 @@ test('copy buttons use the configured card and avoid ambiguous or malformed numb
   assert.equal(buttons('کارت: 12345678901234567').length, 1);
   assert.equal(buttons('کارت: 1 2 3 4 5 6 7 8 9 0 1 2 3 4 5 6 7').length, 1);
   assert.equal(buttons('بدون شماره کارت')[0].copy_text.text, '1234560');
+});
+test('server order payment and delivery notify user in Telegram', async () => {
+  const { ctx, sql, env, db, msg, calls } = setup();
+  await ctx.serverChoose(env, db, 7, '7', 'wire'); await ctx.serverInput(env, db, msg, '5'); await ctx.serverInput(env, db, msg, '10'); await ctx.serverReceipt(env, db, msg);
+  const cq = { from: { id: 99 }, message: { chat: { id: 99 }, message_id: 55, caption: 'invoice' } };
+  await ctx.serverDecide(env, db, cq, 1, 'a', async () => {});
+  assert(calls.some(c => c.payload.chat_id === '7' && c.payload.text?.includes('پرداخت سفارش سرور #1')));
+  await ctx.serverDelivery(env, db, { chat: { id: 99 }, from: { id: 99 }, message_id: 100, document: { file_id: 'cfg', file_name: 'profile.conf' }, reply_to_message: { message_id: 55 } });
+  const record = sql.prepare('SELECT kind,file_id,file_name FROM server_deliveries').get();
+  assert.equal(record.kind, 'document'); assert.equal(record.file_id, 'cfg'); assert.equal(record.file_name, 'profile.conf');
+  await ctx.serverDecide(env, db, cq, 1, 'd', async () => {});
+  assert(calls.some(c => c.payload.chat_id === '7' && c.payload.text?.includes('تحویل داده شد')));
 });
