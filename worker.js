@@ -146,7 +146,7 @@ function getDB(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_chat_unread ON chat_msgs(sender, read_admin)"),
       ]);
       // ستون‌های جدید روی جدول‌های قبلی (اگه از قبل باشن خطا می‌ده و نادیده گرفته می‌شه)
-      for (const sql of ["ALTER TABLE pending_buy ADD COLUMN use_wallet INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN wallet_used INTEGER DEFAULT 0", "ALTER TABLE pending_buy ADD COLUMN topup INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN kind TEXT DEFAULT 'sub'", "ALTER TABLE server_orders ADD COLUMN payment_token TEXT"]) {
+      for (const sql of ["ALTER TABLE pending_buy ADD COLUMN use_wallet INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN wallet_used INTEGER DEFAULT 0", "ALTER TABLE pending_buy ADD COLUMN topup INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN kind TEXT DEFAULT 'sub'", "ALTER TABLE server_orders ADD COLUMN payment_token TEXT", "ALTER TABLE server_deliveries ADD COLUMN kind TEXT", "ALTER TABLE server_deliveries ADD COLUMN file_id TEXT", "ALTER TABLE server_deliveries ADD COLUMN file_name TEXT"]) {
         try { await env.DB.prepare(sql).run(); } catch (e) { /* already exists */ }
       }
       for (const col of ["tg_id", "tg_name", "tg_username"]) {
@@ -268,6 +268,55 @@ async function miniApi(request, env) {
     return json({ name: String(user.first_name || "کاربر").slice(0, 80), username: String(user.username || "").slice(0, 32),
       balance: await walletBalance(db, id), sub: q.sub, sub_until: q.sub_until, remaining: q.remaining, limit: q.limit, period: q.period }, 200, { "Cache-Control": "no-store" });
   }
+  if (body.action === "orders") {
+    const orders = (await db.prepare(`SELECT id,product,volume,days,users,amount,status,created FROM server_orders WHERE tg_id=? ORDER BY id DESC LIMIT 50`).bind(id).all()).results || [];
+    const deliveries = (await db.prepare(`SELECT d.order_id,d.source_message,d.created,d.kind,d.file_name,CASE WHEN d.file_id IS NOT NULL THEN 1 ELSE 0 END downloadable
+      FROM server_deliveries d JOIN server_orders o ON o.id=d.order_id WHERE o.tg_id=? ORDER BY d.created DESC LIMIT 200`).bind(id).all()).results || [];
+    return json({ orders: orders.map(o => ({ ...o, product_name: SERVER_PRODUCTS[o.product]?.name || o.product, files: deliveries.filter(d => d.order_id === o.id) })) }, 200, { "Cache-Control": "no-store" });
+  }
+  if (body.action === "wallet_history") {
+    const transactions = (await db.prepare("SELECT id,ts,delta,reason FROM wallet_log WHERE tg_id=? ORDER BY id DESC LIMIT 100").bind(id).all()).results || [];
+    return json({ balance: await walletBalance(db, id), transactions }, 200, { "Cache-Control": "no-store" });
+  }
+  if (body.action === "tickets") {
+    const messages = (await db.prepare(`SELECT t.id ticket_id,t.status,m.sender,m.text,m.ts FROM tickets t JOIN ticket_msgs m ON m.ticket_id=t.id
+      WHERE t.tg_id=? ORDER BY m.id DESC LIMIT 100`).bind(id).all()).results || [];
+    return json({ messages: messages.reverse() }, 200, { "Cache-Control": "no-store" });
+  }
+  if (body.action === "ticket_send") return miniTicketSend(env, db, user, id, body.text);
+  if (body.action === "config_options") {
+    const q = await quotaInfo(db, id);
+    return json({ countries: BOT_COUNTRIES.map(c => ({ code: c.code, name: c.name, flag: c.flag, locked: botLocked(q, "r", c.code) })),
+      modes: BOT_MODES, roles: BOT_ROLES, dns: BOT_DNS.map(d => ({ label: d.label, value: d.v, locked: botLocked(q, "d", d.v) })),
+      mtu: BOT_MTU, unlock: q.unlock, remaining: q.remaining }, 200, { "Cache-Control": "no-store" });
+  }
+  if (body.action === "config_create") {
+    const b = body.config;
+    if (!b || typeof b !== "object" || !BOT_COUNTRIES.some(c => c.code === b.region) || !Object.hasOwn(BOT_MODES, b.mode) || !Object.hasOwn(BOT_ROLES, b.role) || !BOT_DNS.some(d => d.v === b.dns) || (b.mtu !== "" && !/^[0-9]{3,4}$/.test(String(b.mtu)))) return json({ error: "تنظیمات کانفیگ نامعتبر است" }, 400);
+    const r = await issueConfig(env, { tg_id: id, name: String(user.first_name || "").slice(0, 80), username: String(user.username || "").slice(0, 32) }, b,
+      { cf: request.cf, ua: request.headers.get("User-Agent") || "telegram-mini", ip: request.headers.get("CF-Connecting-IP") || "" });
+    return json(r.body, r.status, { "Cache-Control": "no-store" });
+  }
+  if (body.action === "delivery_file" || body.action === "delivery_resend") {
+    if (!Number.isSafeInteger(body.order_id) || !Number.isSafeInteger(body.message_id) || body.order_id < 1 || body.message_id < 1) return json({ error: "invalid" }, 400);
+    const file = await db.prepare(`SELECT d.source_chat,d.source_message,d.kind,d.file_id,d.file_name FROM server_deliveries d JOIN server_orders o ON o.id=d.order_id
+      WHERE o.id=? AND o.tg_id=? AND d.source_message=? AND o.status IN ('approved','delivered')`).bind(body.order_id, id, body.message_id).first();
+    if (!file) return json({ error: "not_found" }, 404);
+    if (!(await rateOk(db, "mini_file:" + id, 20, 60000))) return json({ error: "rate" }, 429);
+    if (body.action === "delivery_resend") {
+      const sent = await tg(env, "copyMessage", { chat_id: id, from_chat_id: file.source_chat, message_id: file.source_message }).catch(() => null);
+      return sent && sent.ok ? json({ ok: true }, 200, { "Cache-Control": "no-store" }) : json({ error: "delivery" }, 502);
+    }
+    if (!file.file_id || !["document", "photo"].includes(file.kind)) return json({ error: "not_available" }, 404);
+    const info = await tg(env, "getFile", { file_id: file.file_id }).catch(() => null);
+    const path = info?.result?.file_path;
+    if (!info?.ok || !path || !/^[A-Za-z0-9_./-]+$/.test(path) || path.includes("..") || Number(info.result.file_size || 0) > 20 * 1024 * 1024) return json({ error: "not_available" }, 502);
+    let remote;
+    try { remote = await fetch(`https://api.telegram.org/file/bot${env.BOT_TOKEN}/${path}`, { redirect: "error" }); } catch { return json({ error: "not_available" }, 502); }
+    if (!remote.ok) return json({ error: "not_available" }, 502);
+    const name = String(file.file_name || "file").replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 100) || "file";
+    return new Response(remote.body, { headers: { "Content-Type": "application/octet-stream", "Content-Disposition": `attachment; filename="${name}"`, "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff" } });
+  }
   const allowed = new Set(["config", "configs", "server", "plans", "wallet", "invite", "support"]);
   if (!allowed.has(body.action)) return json({ error: "invalid" }, 400);
   if (!(await rateOk(db, "mini_action:" + id, 12, 60000))) return json({ error: "rate" }, 429);
@@ -284,6 +333,22 @@ async function miniApi(request, env) {
   else result = await tg(env, "sendMessage", { chat_id: id, text: SUPPORT_HELP }).catch(() => null);
   if (!(result === true || (result && result.ok))) return json({ error: "delivery" }, 502);
   return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+}
+
+async function miniTicketSend(env, db, user, id, raw) {
+  const text = String(raw || "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim();
+  if (!text || text.length > 1000) return json({ error: "متن باید بین ۱ تا ۱۰۰۰ کاراکتر باشد" }, 400);
+  if (!adminTgId(env)) return json({ error: "پشتیبانی در دسترس نیست" }, 503);
+  const recent = await db.prepare("SELECT COUNT(*) n FROM ticket_msgs m JOIN tickets t ON t.id=m.ticket_id WHERE t.tg_id=? AND m.sender='user' AND m.ts>?").bind(id, Date.now() - TICKET_RATE.win).first();
+  if (recent.n >= TICKET_RATE.max) return json({ error: "rate" }, 429);
+  const now = Date.now(), name = [user.first_name, user.last_name].filter(Boolean).join(" ").slice(0, 100);
+  let ticket = await db.prepare("SELECT id FROM tickets WHERE tg_id=? AND status='open' ORDER BY id DESC LIMIT 1").bind(id).first();
+  if (!ticket) { const r = await db.prepare("INSERT INTO tickets(tg_id,name,username,status,created,updated) VALUES(?,?,?,'open',?,?)").bind(id, name, String(user.username || "").slice(0, 32), now, now).run(); ticket = { id: r.meta.last_row_id }; }
+  const m = await db.prepare("INSERT INTO ticket_msgs(ticket_id,sender,text,ts) VALUES(?,?,?,?)").bind(ticket.id, "user", text, now).run();
+  await db.prepare("UPDATE tickets SET updated=? WHERE id=?").bind(now, ticket.id).run();
+  const sent = await tg(env, "sendMessage", { chat_id: adminTgId(env), text: `🎫 تیکت #${ticket.id} — ${name || "-"}\n🆔 ${id}\n\n${text}\n\nبرای پاسخ، روی همین پیام Reply کنید یا از پنل پاسخ دهید.` }).catch(() => null);
+  if (sent?.ok && sent.result?.message_id) await db.prepare("UPDATE ticket_msgs SET admin_msg_id=? WHERE id=?").bind(sent.result.message_id, m.meta.last_row_id).run();
+  return json({ ok: true, notified: !!sent?.ok }, 200, { "Cache-Control": "no-store" });
 }
 
 /* ---------------- /api/auth/* ---------------- */
@@ -1323,7 +1388,10 @@ async function serverDelivery(env, db, msg) {
   if (existing) { await reply("این پیام قبلاً ارسال شده است."); return true; }
   const sent = await tg(env, "copyMessage", { chat_id: order.tg_id, from_chat_id: msg.chat.id, message_id: msg.message_id }).catch(() => ({ ok: false }));
   if (!sent.ok) { await reply("⚠️ ارسال به مشتری ناموفق بود؛ فایل یا پیام را دوباره Reply کنید."); return true; }
-  await db.prepare("INSERT OR IGNORE INTO server_deliveries(order_id,source_chat,source_message,created) VALUES(?,?,?,?)").bind(order.id, String(msg.chat.id), msg.message_id, Date.now()).run();
+  const kind = msg.document ? "document" : msg.photo ? "photo" : "text";
+  const fileId = msg.document ? msg.document.file_id : msg.photo ? msg.photo[msg.photo.length - 1].file_id : null;
+  const fileName = msg.document ? String(msg.document.file_name || "file").slice(0, 120) : msg.photo ? "photo.jpg" : null;
+  await db.prepare("INSERT OR IGNORE INTO server_deliveries(order_id,source_chat,source_message,created,kind,file_id,file_name) VALUES(?,?,?,?,?,?,?)").bind(order.id, String(msg.chat.id), msg.message_id, Date.now(), kind, fileId, fileName).run();
   await reply(`✅ این پیام برای مشتری سفارش #${order.id} ارسال شد. فایل‌های دیگر را هم جداگانه به رسید Reply کنید؛ پس از ارسال همه، «تحویل داده شد» را بزنید.`, {
     reply_markup: { inline_keyboard: [[{ text: "📦 تحویل داده شد", callback_data: `sd:d:${order.id}` }]] },
   });
