@@ -128,6 +128,7 @@ function getDB(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS mini_config_presets(tg_id TEXT PRIMARY KEY, config TEXT NOT NULL, updated INTEGER NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS game_profiles(tg_id TEXT NOT NULL, name TEXT NOT NULL, config TEXT NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY(tg_id,name))"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS reminder_settings(tg_id TEXT PRIMARY KEY, days INTEGER NOT NULL)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS notification_preferences(tg_id TEXT PRIMARY KEY, ticket INTEGER NOT NULL DEFAULT 1, orders INTEGER NOT NULL DEFAULT 1)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS mini_notices(id INTEGER PRIMARY KEY AUTOINCREMENT,tg_id TEXT NOT NULL,ts INTEGER NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_mini_notices_tg ON mini_notices(tg_id,id)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS wallet(tg_id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)"),
@@ -283,6 +284,15 @@ async function miniApi(request, env) {
     const st = await getSettings(db);
     return json({ days: row ? row.days : st.remind_days }, 200, { "Cache-Control": "no-store" });
   }
+  if (body.action === "notification_preferences_get") {
+    const row = await db.prepare("SELECT ticket,orders FROM notification_preferences WHERE tg_id=?").bind(id).first();
+    return json({ ticket: row ? !!row.ticket : true, orders: row ? !!row.orders : true }, 200, { "Cache-Control": "no-store" });
+  }
+  if (body.action === "notification_preferences_save") {
+    if (typeof body.ticket !== "boolean" || typeof body.orders !== "boolean") return json({ error: "تنظیم اعلان نامعتبر است" }, 400);
+    await db.prepare("INSERT INTO notification_preferences(tg_id,ticket,orders) VALUES(?,?,?) ON CONFLICT(tg_id) DO UPDATE SET ticket=excluded.ticket,orders=excluded.orders").bind(id, Number(body.ticket), Number(body.orders)).run();
+    return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+  }
   if (body.action === "reminder_save") {
     if (!Number.isInteger(body.days) || body.days < 0 || body.days > 30) return json({ error: "روز یادآوری باید از ۰ تا ۳۰ باشد" }, 400);
     await db.prepare("INSERT INTO reminder_settings(tg_id,days) VALUES(?,?) ON CONFLICT(tg_id) DO UPDATE SET days=excluded.days").bind(id, body.days).run();
@@ -392,6 +402,10 @@ async function miniApi(request, env) {
 
 function validMiniConfig(b) {
   return !!b && typeof b === "object" && BOT_COUNTRIES.some(c => c.code === b.region) && Object.hasOwn(BOT_MODES, b.mode) && Object.hasOwn(BOT_ROLES, b.role) && BOT_DNS.some(d => d.v === b.dns) && (b.mtu === "" || (/^[0-9]{3,4}$/.test(String(b.mtu)) && Number(b.mtu) >= 576 && Number(b.mtu) <= 1500));
+}
+async function notificationEnabled(db, id, kind) {
+  const row = await db.prepare("SELECT ticket,orders FROM notification_preferences WHERE tg_id=?").bind(String(id)).first().catch(() => null);
+  return !row || !!row[kind];
 }
 async function recordMiniNotice(db, id, kind, text) {
   await db.prepare("INSERT INTO mini_notices(tg_id,ts,kind,text) VALUES(?,?,?,?)").bind(String(id), Date.now(), kind, String(text).slice(0, 500)).run();
@@ -1453,7 +1467,8 @@ async function serverDecide(env, db, cq, id, action, answer) {
     if (!count || !count.n) return answer("ابتدا فایل یا اطلاعات سرویس را با Reply به رسید ارسال کنید.");
     const res = await db.prepare("UPDATE server_orders SET status='delivered',delivered_at=? WHERE id=? AND status='approved'").bind(Date.now(), id).run();
     if (!res.meta.changes) return answer("این سفارش قبلاً بسته شده است.");
-    const sent = await tg(env, "sendMessage", { chat_id: order.tg_id, text: `✅ سفارش سرور #${id} تحویل داده شد و بسته شد. فایل‌ها و اطلاعات سرویس در پیام‌های قبلی همین چت قرار دارند.` }).catch(() => ({ ok: false }));
+    const wantsNotice = await notificationEnabled(db, order.tg_id, "orders");
+    const sent = wantsNotice ? await tg(env, "sendMessage", { chat_id: order.tg_id, text: `✅ سفارش سرور #${id} تحویل داده شد و بسته شد. فایل‌ها و اطلاعات سرویس در پیام‌های قبلی همین چت قرار دارند.` }).catch(() => ({ ok: false })) : { ok: true };
     if (!sent.ok) {
       await db.prepare("UPDATE server_orders SET status='approved',delivered_at=NULL WHERE id=? AND status='delivered'").bind(id).run();
       return answer("پیام به مشتری نرسید؛ سفارش باز ماند، دوباره تلاش کنید.");
@@ -1468,7 +1483,7 @@ async function serverDecide(env, db, cq, id, action, answer) {
   if (!res.meta.changes) return answer("قبلاً بررسی شده است.");
   const userNotice = action === "a" ? `✅ پرداخت سفارش سرور #${id} تأیید شد. پشتیبانی اطلاعات سرویس را برای شما ارسال می‌کند.` : `❌ رسید سفارش سرور #${id} تأیید نشد. برای پیگیری با پشتیبانی در ارتباط باشید.`;
   await recordMiniNotice(db, order.tg_id, "order", userNotice).catch(() => {});
-  await tg(env, "sendMessage", { chat_id: order.tg_id, text: userNotice }).catch(() => {});
+  if (await notificationEnabled(db, order.tg_id, "orders")) await tg(env, "sendMessage", { chat_id: order.tg_id, text: userNotice }).catch(() => {});
   if (action === "a") {
     const m = cq.message;
     if (m) await tg(env, "editMessageCaption", {
@@ -2303,8 +2318,9 @@ async function ticketReply(env, db, id, text) {
   await db.prepare("INSERT INTO ticket_msgs(ticket_id,sender,text,ts) VALUES(?,?,?,?)").bind(id, "admin", text, now).run();
   await db.prepare("UPDATE tickets SET status='open', updated=? WHERE id=?").bind(now, id).run();
   await recordMiniNotice(db, t.tg_id, "support", `پاسخ جدید برای تیکت #${id} ثبت شد.`).catch(() => {});
-  const r = await tg(env, "sendMessage", { chat_id: t.tg_id, text: `💬 پاسخ پشتیبانی (تیکت #${id}):\n\n${text}` }).catch(() => ({ ok: false }));
-  return { ok: true, delivered: !!r.ok };
+  const enabled = await notificationEnabled(db, t.tg_id, "ticket");
+  const r = enabled ? await tg(env, "sendMessage", { chat_id: t.tg_id, text: `💬 پاسخ پشتیبانی (تیکت #${id}):\n\n${text}` }).catch(() => ({ ok: false })) : { ok: false };
+  return { ok: true, delivered: !!r.ok, notifications_disabled: !enabled };
 }
 
 async function adminReplyFromTelegram(env, db, msg, text) {
@@ -2313,7 +2329,7 @@ async function adminReplyFromTelegram(env, db, msg, text) {
   const res = await ticketReply(env, db, row.ticket_id, text.slice(0, 3500));
   await tg(env, "sendMessage", {
     chat_id: msg.chat.id,
-    text: res.delivered ? `✅ پاسخ برای تیکت #${row.ticket_id} فرستاده شد.` : `⚠️ پاسخ ذخیره شد ولی به کاربر نرسید (احتمالاً ربات رو بلاک کرده).`,
+    text: res.notifications_disabled ? `✅ پاسخ تیکت #${row.ticket_id} ذخیره شد؛ اعلان تلگرام توسط کاربر خاموش است.` : res.delivered ? `✅ پاسخ برای تیکت #${row.ticket_id} فرستاده شد.` : `⚠️ پاسخ ذخیره شد ولی به کاربر نرسید (احتمالاً ربات رو بلاک کرده).`,
   }).catch(() => {});
   return true;
 }
@@ -2353,7 +2369,7 @@ async function adminTicket(request, env, url) {
     await audit(db, "admin", "ticket_reply", String(id), text.slice(0, 80));
     const res = await ticketReply(env, db, id, text);
     if (res.error) return json({ error: res.error }, res.status);
-    return json({ ok: true, delivered: res.delivered });
+    return json({ ok: true, delivered: res.delivered, notifications_disabled: res.notifications_disabled });
   }
   return json({ error: "عملیات نامعتبر" }, 400);
 }
@@ -2931,7 +2947,7 @@ async function adminAudit(env, url) {
 }
 
 // پشتیبان: کلید، سشن و توکن‌ها عمداً نیستن
-const BACKUP_TABLES = ["settings", "discount_codes", "subs", "bans", "user_limits", "receipts", "refs", "tickets", "ticket_msgs", "broadcasts", "users", "visitors", "reminders", "wallet", "wallet_log", "incidents"];
+const BACKUP_TABLES = ["settings", "discount_codes", "subs", "bans", "user_limits", "receipts", "refs", "tickets", "ticket_msgs", "broadcasts", "users", "visitors", "reminders", "reminder_settings", "notification_preferences", "mini_notices", "game_profiles", "mini_config_presets", "wallet", "wallet_log", "incidents"];
 async function adminBackup(env) {
   const db = await getDB(env);
   const out = { exported: new Date().toISOString(), version: 1, tables: {} };
