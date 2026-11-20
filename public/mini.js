@@ -143,6 +143,6 @@
   request('summary').then(data => {
     $('profile-name').textContent = data.name; $('profile-user').textContent = data.username ? '@' + data.username : 'حساب تلگرام'; $('balance').textContent = number(data.balance);
     $('subscription').textContent = data.sub ? 'فعال ✦' : 'غیرفعال'; $('subscription-date').textContent = data.sub_until ? 'تا ' + date(data.sub_until) : 'اشتراک فعال نداری';
-    $('quota').textContent = number(data.remaining) + ' / ' + number(data.limit); $('home-title').textContent = 'سلام ' + data.name + ' ✳'; authenticated = true; setBusy(false);
+    $('quota').textContent = number(data.remaining) + ' / ' + number(data.limit); $('quota-caption').textContent = data.bonus ? `شامل ${number(data.bonus)} ساخت مناسبتی در هر دوره` : 'باقی‌مانده در دوره'; $('home-title').textContent = 'سلام ' + data.name + ' ✳'; authenticated = true; setBusy(false);
   }).catch(error => notify(errorMessage(error)));
 })();

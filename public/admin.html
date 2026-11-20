@@ -356,6 +356,12 @@ details summary{cursor:pointer;font-weight:700;padding:.6rem 0}
 </section>
 <section class="page" id="sec-settings" data-sec="settings">
   <header class="page-h"><h2>⚙️ تنظیمات</h2><p>سقف، پلن‌ها، پیام‌ها و وضعیت سرویس</p></header>
+<div class="blk"><h3 class="blk-h">🎁 سهمیه مناسبتی</h3><div class="card frm">
+    <p>در بازه تعیین‌شده، این تعداد به سقف هر دوره ساخت هر کاربر (حتی سقف اختصاصی) اضافه می‌شود؛ مصرف همان دوره حساب می‌شود. پس از پایان، سهمیه اضافه حذف می‌شود. صفر غیرفعال است. زمان‌ها مطابق ساعت دستگاه شما هستند.</p>
+    <label>تعداد ساخت اضافه در هر دوره</label><input id="occasionBonus" type="number" min="0" max="1000" value="0">
+    <label>شروع</label><input id="occasionStart" type="datetime-local"><label>پایان</label><input id="occasionEnd" type="datetime-local">
+    <button onclick="saveOccasionQuota()" style="margin-top:12px">ذخیره سهمیه مناسبتی</button>
+  </div></div>
 <div class="blk"><h3 class="blk-h">⚙️ محدودیت و اشتراک</h3>
   <div class="card frm">
     <label>سقف کانفیگ روزانه برای کاربر رایگان</label>
@@ -524,13 +530,16 @@ function render(d){
   $("upd").textContent="آخرین به‌روزرسانی: "+new Date().toLocaleTimeString("fa-IR");
 }
 async function start(){
-  $("login").classList.add("hide");$("app").classList.remove("hide");showSec(location.hash.slice(1));loadChatThreads();loadCodes();loadTickets();loadBroadcasts();loadInsights();loadRefs();loadAudit();loadRetention();loadWallets();loadIncidents();loadConfigFiles();window._rl=Date.now();loadReport();
+  $("login").classList.add("hide");$("app").classList.remove("hide");showSec(location.hash.slice(1));loadChatThreads();loadCodes();loadTickets();loadBroadcasts();loadInsights();loadRefs();loadAudit();loadRetention();loadWallets();loadIncidents();loadConfigFiles();loadOccasionQuota();window._rl=Date.now();loadReport();
   clearInterval(timer);timer=setInterval(()=>{if(!document.hidden){load();loadChatThreads();if(chTg)openChat(chTg,true);loadTickets();loadBroadcasts();loadConfigFiles();if(window._tid)openTicket(window._tid,true)}},15000);
 }
 async function doLogin(){
   pw=$("pw").value;$("err").textContent="";
   if(await load()){sessionStorage.setItem("imrc_admin",pw);start()}
 }
+function localDateTime(ts){if(!ts)return "";const d=new Date(ts);return new Date(ts-d.getTimezoneOffset()*60000).toISOString().slice(0,16)}
+async function loadOccasionQuota(){try{const r=await fetch('/api/admin/occasion-quota',{credentials:'same-origin',cache:'no-store'});if(!r.ok)throw Error();const d=await r.json();$('occasionBonus').value=d.bonus;$('occasionStart').value=localDateTime(d.starts);$('occasionEnd').value=localDateTime(d.ends)}catch(e){alert('دریافت سهمیه مناسبتی ناموفق بود')}}
+async function saveOccasionQuota(){const bonus=Number($('occasionBonus').value), starts=bonus?new Date($('occasionStart').value).getTime():0,ends=bonus?new Date($('occasionEnd').value).getTime():0;if(!Number.isInteger(bonus)||bonus<0||bonus>1000||!Number.isFinite(starts)||!Number.isFinite(ends)||(bonus&&ends<=starts)){alert('سهمیه و بازه معتبر وارد کنید.');return}try{await post('/api/admin/occasion-quota',{bonus,starts,ends});alert('✅ سهمیه ذخیره شد');await loadOccasionQuota()}catch(e){alert('❌ '+e.message)}}
 async function post(path,body){
   const r=await fetch(path,{method:"POST",headers:Object.assign({"Content-Type":"application/json"},authH()),body:JSON.stringify(body)});
   const d=await r.json().catch(()=>({}));
