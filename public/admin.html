@@ -362,6 +362,15 @@ details summary{cursor:pointer;font-weight:700;padding:.6rem 0}
     <label>شروع</label><input id="occasionStart" type="datetime-local"><label>پایان</label><input id="occasionEnd" type="datetime-local">
     <button onclick="saveOccasionQuota()" style="margin-top:12px">ذخیره سهمیه مناسبتی</button>
   </div></div>
+<div class="blk"><h3 class="blk-h">⭐ باشگاه امتیاز</h3><div class="card frm">
+    <p>پیش‌فرض غیرفعال است. امتیاز فقط از خرید اشتراک و دعوت موفق جمع می‌شود و تنها به اعتبار کیف پول تبدیل می‌شود؛ قابل برداشت نقدی یا انتقال نیست. هر تغییر نرخ روی امتیازهای آینده اثر دارد.</p>
+    <label><input id="setPointsOn" type="checkbox"/> باشگاه امتیاز فعال باشد</label>
+    <label>امتیاز به ازای هر ۱٬۰۰۰ تومان خرید اشتراک</label><input id="setPointsRate" type="number" min="0" max="1000" value="0" inputmode="numeric"/>
+    <label>امتیاز به ازای هر دعوت موفق</label><input id="setPointsInvite" type="number" min="0" max="100000" value="0" inputmode="numeric"/>
+    <label>ارزش هر امتیاز هنگام تبدیل (تومان)</label><input id="setPointsValue" type="number" min="1" max="1000" value="1" inputmode="numeric"/>
+    <label>حداقل امتیاز برای تبدیل</label><input id="setPointsMin" type="number" min="0" max="1000000" value="100" inputmode="numeric"/>
+    <button onclick="saveSettings()" style="margin-top:12px;width:100%">ذخیره تنظیمات امتیاز</button>
+  </div></div>
 <div class="blk"><h3 class="blk-h">⚙️ محدودیت و اشتراک</h3>
   <div class="card frm">
     <label>سقف کانفیگ روزانه برای کاربر رایگان</label>
@@ -410,6 +419,9 @@ details summary{cursor:pointer;font-weight:700;padding:.6rem 0}
     <label>حداکثر دفعات استفاده (۰ = نامحدود)</label><input id="cMax" type="number" min="0" value="0" inputmode="numeric"/>
     <label>مدت اعتبار به روز (۰ = بدون انقضا)</label><input id="cDays" type="number" min="0" value="0" inputmode="numeric"/>
     <button onclick="addCode()" style="margin-top:12px;width:100%">ساخت کد</button>
+    <label>کد شخصی برای شناسه تلگرام (خالی = کد عمومی)</label><input id="cTg" inputmode="numeric" placeholder="123456789" style="margin-top:8px"/>
+    <label>حداقل مبلغ خرید برای اعمال کد (۰ = بدون شرط)</label><input id="cMin" type="number" min="0" value="0" inputmode="numeric" style="margin-top:8px"/>
+    <div style="font-size:11px;color:var(--mut);margin-top:6px">کد شخصی فقط برای همان کاربر معتبر است و در همان دستور /code ربات وارد می‌شود.</div>
     <div id="codes" style="margin-top:12px"></div>
   </div>
 
@@ -526,7 +538,7 @@ function render(d){
   // کاربران: با loadUsers() گرفته می‌شن (جستجو و فیلتر و صفحه‌بندی)
 
   $("events").innerHTML=d.events.map(e=>`<div class="ev"><b>${esc(e.tg_name||(e.tg_username?"@"+e.tg_username:"#"+e.vid.slice(0,6)))}</b> — ${evText(e)}<time>${clock(e.ts)}</time></div>`).join("")||'<span style="color:var(--muted)">هنوز فعالیتی نیست</span>';
-  if(d.settings&&!window._setLoaded){window._setLoaded=true;$("setFree").value=d.settings.free_limit;$("setSub").value=d.settings.sub_limit;$("setText").value=d.settings.buy_text;$("setFree2").value=d.settings.free_countries;$("setPlans").value=d.settings.plans_text;$("setPay").value=d.settings.pay_text;$("setRef").value=d.settings.ref_days;$("setRefCredit").value=d.settings.ref_credit;$("setRemind").value=d.settings.remind_days;$("setNotify").checked=!!d.settings.admin_notify;$("setStatus").value=d.settings.status_level||"ok";$("setStatusNote").value=d.settings.status_note||"";$("setMsgWelcome").value=d.settings.msg_welcome||"";$("setMsgReminder").value=d.settings.msg_reminder||"";$("setMsgApproved").value=d.settings.msg_approved||""}
+  if(d.settings&&!window._setLoaded){window._setLoaded=true;$("setFree").value=d.settings.free_limit;$("setSub").value=d.settings.sub_limit;$("setText").value=d.settings.buy_text;$("setFree2").value=d.settings.free_countries;$("setPlans").value=d.settings.plans_text;$("setPay").value=d.settings.pay_text;$("setRef").value=d.settings.ref_days;$("setRefCredit").value=d.settings.ref_credit;$("setRemind").value=d.settings.remind_days;$("setNotify").checked=!!d.settings.admin_notify;$("setStatus").value=d.settings.status_level||"ok";$("setStatusNote").value=d.settings.status_note||"";$("setMsgWelcome").value=d.settings.msg_welcome||"";$("setMsgReminder").value=d.settings.msg_reminder||"";$("setMsgApproved").value=d.settings.msg_approved||"";$("setPointsOn").checked=!!d.settings.points_enabled;$("setPointsRate").value=d.settings.points_rate;$("setPointsInvite").value=d.settings.points_invite;$("setPointsValue").value=d.settings.points_value;$("setPointsMin").value=d.settings.points_min}
   $("upd").textContent="آخرین به‌روزرسانی: "+new Date().toLocaleTimeString("fa-IR");
 }
 async function start(){
@@ -590,7 +602,7 @@ async function revoke(id){
   try{await post("/api/admin/sub",{tg_id:id,days:0});load()}catch(e){alert("❌ "+e.message)}
 }
 async function saveSettings(){
-  try{await post("/api/admin/settings",{free_limit:$("setFree").value,sub_limit:$("setSub").value,buy_text:$("setText").value,free_countries:$("setFree2").value,plans:$("setPlans").value,pay_text:$("setPay").value,ref_days:$("setRef").value,ref_credit:$("setRefCredit").value,remind_days:$("setRemind").value,admin_notify:$("setNotify").checked,status_level:$("setStatus").value,status_note:$("setStatusNote").value,msg_welcome:$("setMsgWelcome").value,msg_reminder:$("setMsgReminder").value,msg_approved:$("setMsgApproved").value});alert("✅ ذخیره شد.");window._setLoaded=false;load()}catch(e){alert("❌ "+e.message)}
+  try{await post("/api/admin/settings",{free_limit:$("setFree").value,sub_limit:$("setSub").value,buy_text:$("setText").value,free_countries:$("setFree2").value,plans:$("setPlans").value,pay_text:$("setPay").value,ref_days:$("setRef").value,ref_credit:$("setRefCredit").value,remind_days:$("setRemind").value,admin_notify:$("setNotify").checked,status_level:$("setStatus").value,status_note:$("setStatusNote").value,msg_welcome:$("setMsgWelcome").value,msg_reminder:$("setMsgReminder").value,msg_approved:$("setMsgApproved").value,points_enabled:$("setPointsOn").checked,points_rate:$("setPointsRate").value,points_invite:$("setPointsInvite").value,points_value:$("setPointsValue").value,points_min:$("setPointsMin").value});alert("✅ ذخیره شد.");window._setLoaded=false;load()}catch(e){alert("❌ "+e.message)}
 }
 let tgTimer;
 async function tgLogin(){
@@ -615,16 +627,25 @@ async function loadCodes(){
   const r=await fetch("/api/admin/codes",{headers:authH()}).catch(()=>null);
   if(!r||!r.ok)return;
   const d=await r.json();
-  $("codes").innerHTML=d.codes.map(c=>{
+  const pub=d.codes.map(c=>{
     const exp=c.expires?new Date(c.expires).toLocaleDateString("fa-IR"):"بدون انقضا";
     const used=fa(c.used)+" / "+(c.max_uses?fa(c.max_uses):"∞");
     const off=c.active?"":' <span class="badge" style="background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger)">غیرفعال</span>';
     const btn=c.active?`<button onclick="toggleCode('${esc(c.code)}',true)">غیرفعال کن</button>`:`<button onclick="toggleCode('${esc(c.code)}',false)">فعال کن</button>`;
     return `<div class="arow"><div><b dir="ltr">${esc(c.code)}</b> <span class="badge">${fa(c.percent)}٪</span>${off}<div class="sub">استفاده: ${used} • ${exp}</div></div><div class="btns" style="margin:0">${btn}</div></div>`;
-  }).join("")||'<span style="color:var(--muted)">کدی ساخته نشده</span>';
+  }).join("");
+  const per=(d.personal||[]).map(c=>{
+    const exp=c.expires?new Date(c.expires).toLocaleDateString("fa-IR"):"بدون انقضا";
+    const used=fa(c.used)+" / "+(c.max_uses?fa(c.max_uses):"∞");
+    const off=c.active?"":' <span class="badge" style="background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger)">غیرفعال</span>';
+    const btn=c.active?`<button onclick="toggleCode('${esc(c.code)}',true)">غیرفعال کن</button>`:`<button onclick="toggleCode('${esc(c.code)}',false)">فعال کن</button>`;
+    const min=c.min_amount?` • حداقل خرید ${fa(c.min_amount)} تومان`:"";
+    return `<div class="arow"><div><b dir="ltr">${esc(c.code)}</b> <span class="badge">${fa(c.percent)}٪ شخصی</span>${off}<div class="sub">کاربر <b dir="ltr">${esc(c.tg_id)}</b> • استفاده: ${used} • ${exp}${min}</div></div><div class="btns" style="margin:0">${btn}</div></div>`;
+  }).join("");
+  $("codes").innerHTML=pub+per||'<span style="color:var(--muted)">کدی ساخته نشده</span>';
 }
 async function addCode(){
-  try{await post("/api/admin/codes",{code:$("cCode").value,percent:$("cPct").value,max_uses:$("cMax").value,days:$("cDays").value});$("cCode").value="";loadCodes()}catch(e){alert("❌ "+e.message)}
+  try{const tg=$("cTg").value.trim();await post("/api/admin/codes",{code:$("cCode").value,percent:$("cPct").value,max_uses:$("cMax").value,days:$("cDays").value,tg_id:tg,min_amount:$("cMin").value});$("cCode").value="";$("cTg").value="";$("cMin").value="0";loadCodes()}catch(e){alert("❌ "+e.message)}
 }
 async function toggleCode(code,off){
   try{await post("/api/admin/codes",{code,disable:off});loadCodes()}catch(e){alert("❌ "+e.message)}
