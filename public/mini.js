@@ -22,9 +22,10 @@
   function empty(container, text) { container.replaceChildren(element('div', text, 'empty-state')); }
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(screen => { const active = screen.id === id; screen.hidden = !active; screen.classList.toggle('active', active); });
-    document.querySelectorAll('.nav-item').forEach(item => { const active = item.dataset.tab === id || (['orders','history'].includes(id) && item.dataset.tab === 'account') || (['support','generator'].includes(id) && item.dataset.tab === 'home'); item.classList.toggle('active', active); if (active) item.setAttribute('aria-current','page'); else item.removeAttribute('aria-current'); });
+    document.querySelectorAll('.nav-item').forEach(item => { const active = item.dataset.tab === id || (['orders','history','locations','troubleshoot'].includes(id) && item.dataset.tab === 'account') || (['support','generator'].includes(id) && item.dataset.tab === 'home'); item.classList.toggle('active', active); if (active) item.setAttribute('aria-current','page'); else item.removeAttribute('aria-current'); });
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (authenticated) {
+      if (id === 'locations') loadLocations();
       if (id === 'orders') loadOrders();
       if (id === 'history') loadHistory();
       if (id === 'support') loadTickets();
@@ -41,6 +42,13 @@
     catch (error) { notify(errorMessage(error)); } finally { setBusy(false); }
   }));
   function download(blob, name) { const url = URL.createObjectURL(blob); const link = element('a'); link.href = url; link.download = name; document.body.appendChild(link); link.click(); link.remove(); setTimeout(() => URL.revokeObjectURL(url), 60000); }
+  async function loadLocations() {
+    const box = $('locations-content'); empty(box, 'در حال دریافت وضعیت...');
+    try { const data = await request('locations'); box.replaceChildren(); if (!data.locations.length) return empty(box, 'هنوز وضعیتی توسط ادمین ثبت نشده است.');
+      const labels = { ok: 'فعال', degraded: 'کند یا در حال بررسی', down: 'قطع' };
+      data.locations.forEach(loc => { const card = element('article', null, 'detail-card'); card.append(element('h2', loc.name), element('span', labels[loc.level] || 'نامشخص', 'status-pill')); if (loc.note) card.append(element('p', loc.note)); card.append(element('p', 'ثبت دستی: ' + date(loc.updated))); box.append(card); });
+    } catch (error) { empty(box, errorMessage(error)); }
+  }
   async function loadOrders() {
     const box = $('orders-content'); empty(box, 'در حال دریافت سفارش‌ها...');
     try {
@@ -75,11 +83,11 @@
   async function loadTickets() {
     const box = $('ticket-content'); empty(box, 'در حال دریافت پیام‌ها...');
     try { const data = await request('tickets'); box.replaceChildren(); if (!data.messages.length) return empty(box, 'هنوز تیکتی نداری؛ از اینجا پیامت را بفرست.');
-      data.messages.forEach(msg => { const div = element('div', null, 'ticket-msg' + (msg.sender === 'admin' ? ' admin' : '')); div.append(element('small', `${msg.sender === 'admin' ? 'پشتیبانی' : 'شما'} · تیکت #${number(msg.ticket_id)} · ${date(msg.ts)}`), document.createTextNode(msg.text)); box.append(div); }); box.scrollTop = box.scrollHeight;
+      data.messages.forEach(msg => { const div = element('div', null, 'ticket-msg' + (msg.sender === 'admin' ? ' admin' : '')); div.append(element('small', `${msg.sender === 'admin' ? 'پشتیبانی' : 'شما'} · تیکت #${number(msg.ticket_id)} · ${date(msg.ts)} · ${{general:'عمومی',payment:'پرداخت',connection:'اتصال',delivery:'تحویل'}[msg.category] || 'عمومی'}`), document.createTextNode(msg.text)); box.append(div); }); box.scrollTop = box.scrollHeight;
     } catch (error) { empty(box, errorMessage(error)); }
   }
   $('support-refresh').addEventListener('click', () => { if (authenticated) loadTickets(); });
-  $('support-form').addEventListener('submit', async e => { e.preventDefault(); if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); const submit = e.submitter; submit.disabled = true; try { const result = await request('ticket_send', { text: $('support-text').value }); $('support-text').value = ''; await loadTickets(); notify(result.notified ? 'پیامت ثبت شد.' : 'پیامت ثبت شد اما اعلان برای ادمین نرسید؛ پشتیبانی می‌تواند آن را در پنل ببیند.'); } catch (error) { notify(errorMessage(error)); } finally { submit.disabled = false; } });
+  $('support-form').addEventListener('submit', async e => { e.preventDefault(); if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); const submit = e.submitter; submit.disabled = true; try { const result = await request('ticket_send', { text: $('support-text').value, category: $('support-category').value }); $('support-text').value = ''; await loadTickets(); notify(result.notified ? 'پیامت ثبت شد.' : 'پیامت ثبت شد اما اعلان برای ادمین نرسید؛ پشتیبانی می‌تواند آن را در پنل ببیند.'); } catch (error) { notify(errorMessage(error)); } finally { submit.disabled = false; } });
   function options(select, values) { select.replaceChildren(); values.forEach(v => { const o = element('option', v.label); o.value = v.value; o.disabled = !!v.locked; select.append(o); }); }
   async function loadOptions() {
     try { const data = await request('config_options');
@@ -91,8 +99,13 @@
       $('cfg-custom-mtu').disabled = !data.unlock; $('cfg-custom-mtu').placeholder = data.unlock ? 'مثلاً 1300' : 'نیازمند اشتراک';
     } catch (error) { notify(errorMessage(error)); }
   }
+  function configFields() { return { region: $('cfg-region').value, mode: $('cfg-mode').value, role: $('cfg-role').value, dns: $('cfg-dns').value, mtu: $('cfg-custom-mtu').value || $('cfg-mtu').value, name: $('cfg-name').value }; }
+  $('preset-save').addEventListener('click', async () => { if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); try { await request('config_preset_save', { config: configFields() }); notify('تنظیمات دلخواه ذخیره شد؛ فایل و کلید خصوصی ذخیره نمی‌شوند.'); } catch(e) { notify(errorMessage(e)); } });
+  $('preset-load').addEventListener('click', async () => { if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); try { const data = await request('config_preset_get'); if (!data.config) return notify('هنوز تنظیماتی ذخیره نشده است.'); const c = data.config; $('cfg-region').value = c.region; $('cfg-mode').value = c.mode; $('cfg-role').value = c.role; $('cfg-dns').value = c.dns; $('cfg-name').value = c.name || ''; const preset = [...$('cfg-mtu').options].some(o => o.value === c.mtu); $('cfg-mtu').value = preset ? c.mtu : ''; $('cfg-custom-mtu').value = preset ? '' : c.mtu; notify('تنظیمات بارگذاری شد. محدودیت اشتراک هنگام ساخت دوباره بررسی می‌شود.'); } catch(e) { notify(errorMessage(e)); } });
+  const help = { connect: '۱. اینترنت معمولی خود را بررسی کن.\n۲. ساعت دستگاه را روی حالت خودکار بگذار.\n۳. فایل را دوباره وارد و شبکه دیگری را امتحان کن.\n۴. اگر حل نشد به پشتیبانی پیام بده.', slow: '۱. یک شبکه دیگر را امتحان کن.\n۲. برنامه‌های مصرف‌کننده اینترنت را ببند.\n۳. نتیجه ممکن است با زمان و شبکه تغییر کند؛ برای بررسی دقیق به پشتیبانی پیام بده.', file: '۱. مطمئن شو فایل با پسوند .conf ذخیره شده.\n۲. برنامه سازگار را به‌روز کن.\n۳. فایل را مستقیم وارد کن و از تغییر محتوای آن بپرهیز.', payment: '۱. وضعیت سفارش را در سرویس‌های من بررسی کن.\n۲. شماره سفارش و رسید را برای پشتیبانی بفرست.\n۳. اطلاعات محرمانه کارت را ارسال نکن.' };
+  document.querySelectorAll('[data-help]').forEach(button => button.addEventListener('click', () => { $('help-answer').textContent = help[button.dataset.help] || ''; $('help-answer').style.whiteSpace = 'pre-line'; $('help-answer').hidden = false; }));
   $('config-form').addEventListener('submit', async e => { e.preventDefault(); if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); const submit = e.submitter; submit.disabled = true;
-    try { const data = await request('config_create', { config: { region: $('cfg-region').value, mode: $('cfg-mode').value, role: $('cfg-role').value, dns: $('cfg-dns').value, mtu: $('cfg-custom-mtu').value || $('cfg-mtu').value, name: $('cfg-name').value } }); configText = data.config; configName = (data.name || 'IMRC').replace(/[^a-zA-Z0-9_-]/g, '') + '.conf'; $('config-output').value = configText; $('config-result').hidden = false; $('config-result').scrollIntoView({ behavior: 'smooth' }); $('quota').textContent = number(data.remaining) + ' / ' + number(data.limit); }
+    try { const data = await request('config_create', { config: configFields() }); configText = data.config; configName = (data.name || 'IMRC').replace(/[^a-zA-Z0-9_-]/g, '') + '.conf'; $('config-output').value = configText; $('config-result').hidden = false; $('config-result').scrollIntoView({ behavior: 'smooth' }); $('quota').textContent = number(data.remaining) + ' / ' + number(data.limit); }
     catch (error) { notify(errorMessage(error)); } finally { submit.disabled = false; }
   });
   $('config-download').addEventListener('click', () => { if (configText) download(new Blob([configText], { type: 'text/plain;charset=utf-8' }), configName); });

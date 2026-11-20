@@ -124,6 +124,8 @@ function getDB(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS uptime_samples(ts INTEGER PRIMARY KEY, ok INTEGER)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS bot_state(tg_id TEXT PRIMARY KEY, draft TEXT, awaiting TEXT DEFAULT '', mid INTEGER DEFAULT 0, ts INTEGER)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS incidents(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, level TEXT, body TEXT, started INTEGER, resolved INTEGER)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS location_status(code TEXT PRIMARY KEY, level TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', updated INTEGER NOT NULL)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS mini_config_presets(tg_id TEXT PRIMARY KEY, config TEXT NOT NULL, updated INTEGER NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS wallet(tg_id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)"),
         env.DB.prepare(`CREATE TABLE IF NOT EXISTS wallet_quotes(
           token TEXT PRIMARY KEY, tg_id TEXT NOT NULL, kind TEXT NOT NULL, amount INTEGER NOT NULL,
@@ -146,7 +148,7 @@ function getDB(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_chat_unread ON chat_msgs(sender, read_admin)"),
       ]);
       // ستون‌های جدید روی جدول‌های قبلی (اگه از قبل باشن خطا می‌ده و نادیده گرفته می‌شه)
-      for (const sql of ["ALTER TABLE pending_buy ADD COLUMN use_wallet INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN wallet_used INTEGER DEFAULT 0", "ALTER TABLE pending_buy ADD COLUMN topup INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN kind TEXT DEFAULT 'sub'", "ALTER TABLE server_orders ADD COLUMN payment_token TEXT", "ALTER TABLE server_deliveries ADD COLUMN kind TEXT", "ALTER TABLE server_deliveries ADD COLUMN file_id TEXT", "ALTER TABLE server_deliveries ADD COLUMN file_name TEXT"]) {
+      for (const sql of ["ALTER TABLE pending_buy ADD COLUMN use_wallet INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN wallet_used INTEGER DEFAULT 0", "ALTER TABLE pending_buy ADD COLUMN topup INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN kind TEXT DEFAULT 'sub'", "ALTER TABLE server_orders ADD COLUMN payment_token TEXT", "ALTER TABLE server_deliveries ADD COLUMN kind TEXT", "ALTER TABLE server_deliveries ADD COLUMN file_id TEXT", "ALTER TABLE server_deliveries ADD COLUMN file_name TEXT", "ALTER TABLE tickets ADD COLUMN category TEXT DEFAULT 'general'"]) {
         try { await env.DB.prepare(sql).run(); } catch (e) { /* already exists */ }
       }
       for (const col of ["tg_id", "tg_name", "tg_username"]) {
@@ -268,6 +270,10 @@ async function miniApi(request, env) {
     return json({ name: String(user.first_name || "کاربر").slice(0, 80), username: String(user.username || "").slice(0, 32),
       balance: await walletBalance(db, id), sub: q.sub, sub_until: q.sub_until, remaining: q.remaining, limit: q.limit, period: q.period }, 200, { "Cache-Control": "no-store" });
   }
+  if (body.action === "locations") {
+    const rows = (await db.prepare("SELECT code,level,note,updated FROM location_status ORDER BY code").all()).results || [];
+    return json({ locations: rows.map(r => ({ ...r, name: BOT_COUNTRIES.find(c => c.code === r.code)?.name || r.code })) }, 200, { "Cache-Control": "no-store" });
+  }
   if (body.action === "orders") {
     const orders = (await db.prepare(`SELECT id,product,volume,days,users,amount,status,created FROM server_orders WHERE tg_id=? ORDER BY id DESC LIMIT 50`).bind(id).all()).results || [];
     const deliveries = (await db.prepare(`SELECT d.order_id,d.source_message,d.created,d.kind,d.file_name,CASE WHEN d.file_id IS NOT NULL THEN 1 ELSE 0 END downloadable
@@ -279,20 +285,32 @@ async function miniApi(request, env) {
     return json({ balance: await walletBalance(db, id), transactions }, 200, { "Cache-Control": "no-store" });
   }
   if (body.action === "tickets") {
-    const messages = (await db.prepare(`SELECT t.id ticket_id,t.status,m.sender,m.text,m.ts FROM tickets t JOIN ticket_msgs m ON m.ticket_id=t.id
+    const messages = (await db.prepare(`SELECT t.id ticket_id,t.status,t.category,m.sender,m.text,m.ts FROM tickets t JOIN ticket_msgs m ON m.ticket_id=t.id
       WHERE t.tg_id=? ORDER BY m.id DESC LIMIT 100`).bind(id).all()).results || [];
     return json({ messages: messages.reverse() }, 200, { "Cache-Control": "no-store" });
   }
-  if (body.action === "ticket_send") return miniTicketSend(env, db, user, id, body.text);
+  if (body.action === "ticket_send") return miniTicketSend(env, db, user, id, body.text, body.category);
   if (body.action === "config_options") {
     const q = await quotaInfo(db, id);
     return json({ countries: BOT_COUNTRIES.map(c => ({ code: c.code, name: c.name, flag: c.flag, locked: botLocked(q, "r", c.code) })),
       modes: BOT_MODES, roles: BOT_ROLES, dns: BOT_DNS.map(d => ({ label: d.label, value: d.v, locked: botLocked(q, "d", d.v) })),
       mtu: BOT_MTU, unlock: q.unlock, remaining: q.remaining }, 200, { "Cache-Control": "no-store" });
   }
+  if (body.action === "config_preset_get") {
+    const row = await db.prepare("SELECT config FROM mini_config_presets WHERE tg_id=?").bind(id).first();
+    let config = null; try { if (row) config = JSON.parse(row.config); } catch {}
+    return json({ config }, 200, { "Cache-Control": "no-store" });
+  }
+  if (body.action === "config_preset_save") {
+    const b = body.config;
+    if (!validMiniConfig(b)) return json({ error: "تنظیمات کانفیگ نامعتبر است" }, 400);
+    const saved = { region: b.region, mode: b.mode, role: b.role, dns: b.dns, mtu: String(b.mtu || ""), name: String(b.name || "").slice(0, 15) };
+    await db.prepare("INSERT INTO mini_config_presets(tg_id,config,updated) VALUES(?,?,?) ON CONFLICT(tg_id) DO UPDATE SET config=excluded.config,updated=excluded.updated").bind(id, JSON.stringify(saved), Date.now()).run();
+    return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+  }
   if (body.action === "config_create") {
     const b = body.config;
-    if (!b || typeof b !== "object" || !BOT_COUNTRIES.some(c => c.code === b.region) || !Object.hasOwn(BOT_MODES, b.mode) || !Object.hasOwn(BOT_ROLES, b.role) || !BOT_DNS.some(d => d.v === b.dns) || (b.mtu !== "" && !/^[0-9]{3,4}$/.test(String(b.mtu)))) return json({ error: "تنظیمات کانفیگ نامعتبر است" }, 400);
+    if (!validMiniConfig(b)) return json({ error: "تنظیمات کانفیگ نامعتبر است" }, 400);
     const r = await issueConfig(env, { tg_id: id, name: String(user.first_name || "").slice(0, 80), username: String(user.username || "").slice(0, 32) }, b,
       { cf: request.cf, ua: request.headers.get("User-Agent") || "telegram-mini", ip: request.headers.get("CF-Connecting-IP") || "" });
     return json(r.body, r.status, { "Cache-Control": "no-store" });
@@ -335,18 +353,24 @@ async function miniApi(request, env) {
   return json({ ok: true }, 200, { "Cache-Control": "no-store" });
 }
 
-async function miniTicketSend(env, db, user, id, raw) {
+function validMiniConfig(b) {
+  return !!b && typeof b === "object" && BOT_COUNTRIES.some(c => c.code === b.region) && Object.hasOwn(BOT_MODES, b.mode) && Object.hasOwn(BOT_ROLES, b.role) && BOT_DNS.some(d => d.v === b.dns) && (b.mtu === "" || (/^[0-9]{3,4}$/.test(String(b.mtu)) && Number(b.mtu) >= 576 && Number(b.mtu) <= 1500));
+}
+async function miniTicketSend(env, db, user, id, raw, rawCategory) {
+  const categories = { general: "عمومی", payment: "پرداخت", connection: "اتصال", delivery: "تحویل" };
+  const category = rawCategory == null ? "general" : String(rawCategory);
+  if (!Object.hasOwn(categories, category)) return json({ error: "موضوع تیکت نامعتبر است" }, 400);
   const text = String(raw || "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim();
   if (!text || text.length > 1000) return json({ error: "متن باید بین ۱ تا ۱۰۰۰ کاراکتر باشد" }, 400);
   if (!adminTgId(env)) return json({ error: "پشتیبانی در دسترس نیست" }, 503);
   const recent = await db.prepare("SELECT COUNT(*) n FROM ticket_msgs m JOIN tickets t ON t.id=m.ticket_id WHERE t.tg_id=? AND m.sender='user' AND m.ts>?").bind(id, Date.now() - TICKET_RATE.win).first();
   if (recent.n >= TICKET_RATE.max) return json({ error: "rate" }, 429);
   const now = Date.now(), name = [user.first_name, user.last_name].filter(Boolean).join(" ").slice(0, 100);
-  let ticket = await db.prepare("SELECT id FROM tickets WHERE tg_id=? AND status='open' ORDER BY id DESC LIMIT 1").bind(id).first();
-  if (!ticket) { const r = await db.prepare("INSERT INTO tickets(tg_id,name,username,status,created,updated) VALUES(?,?,?,'open',?,?)").bind(id, name, String(user.username || "").slice(0, 32), now, now).run(); ticket = { id: r.meta.last_row_id }; }
+  let ticket = await db.prepare("SELECT id FROM tickets WHERE tg_id=? AND status='open' AND COALESCE(category,'general')=? ORDER BY id DESC LIMIT 1").bind(id, category).first();
+  if (!ticket) { const r = await db.prepare("INSERT INTO tickets(tg_id,name,username,status,created,updated,category) VALUES(?,?,?,'open',?,?,?)").bind(id, name, String(user.username || "").slice(0, 32), now, now, category).run(); ticket = { id: r.meta.last_row_id }; }
   const m = await db.prepare("INSERT INTO ticket_msgs(ticket_id,sender,text,ts) VALUES(?,?,?,?)").bind(ticket.id, "user", text, now).run();
   await db.prepare("UPDATE tickets SET updated=? WHERE id=?").bind(now, ticket.id).run();
-  const sent = await tg(env, "sendMessage", { chat_id: adminTgId(env), text: `🎫 تیکت #${ticket.id} — ${name || "-"}\n🆔 ${id}\n\n${text}\n\nبرای پاسخ، روی همین پیام Reply کنید یا از پنل پاسخ دهید.` }).catch(() => null);
+  const sent = await tg(env, "sendMessage", { chat_id: adminTgId(env), text: `🎫 تیکت #${ticket.id} — ${name || "-"}\n📌 موضوع: ${categories[category]}\n🆔 ${id}\n\n${text}\n\nبرای پاسخ، روی همین پیام Reply کنید یا از پنل پاسخ دهید.` }).catch(() => null);
   if (sent?.ok && sent.result?.message_id) await db.prepare("UPDATE ticket_msgs SET admin_msg_id=? WHERE id=?").bind(sent.result.message_id, m.meta.last_row_id).run();
   return json({ ok: true, notified: !!sent?.ok }, 200, { "Cache-Control": "no-store" });
 }
@@ -847,6 +871,22 @@ async function handleText(env, db, msg, text, origin) {
       : "ℹ️ اگه این حساب ادمینه، این عدد رو (فقط عدد، بدون @ و فاصله) توی ADMIN_TG_ID بذار و دوباره امتحان کن."));
   }
   if (/^\/me(@\S+)?(\s|$)/i.test(text)) return sendMyStatus(env, db, chatId, tgId);
+  m = text.match(/^\/health(?:@\S+)?\s+([a-z]{2})\s+(ok|degraded|down)(?:\s+([\s\S]{1,200}))?\s*$/i);
+  if (m) {
+    if (!isAdmin(env, from.id)) return reply(NOT_ADMIN);
+    const code = m[1].toLowerCase(), level = m[2].toLowerCase();
+    if (!BOT_COUNTRIES.some(c => c.code === code)) return reply("لوکیشن نامعتبر است.");
+    const note = String(m[3] || "").trim().slice(0, 200);
+    await db.prepare("INSERT INTO location_status(code,level,note,updated) VALUES(?,?,?,?) ON CONFLICT(code) DO UPDATE SET level=excluded.level,note=excluded.note,updated=excluded.updated").bind(code, level, note, Date.now()).run();
+    await audit(db, "tg:" + tgId, "location_status", code, level);
+    return reply("✅ وضعیت دستی لوکیشن ذخیره شد. این وضعیت تست زنده نیست.");
+  }
+  m = text.match(/^\/dm(?:@\S+)?\s+(\d{3,20})\s+([\s\S]+)$/i);
+  if (m) {
+    if (!isAdmin(env, from.id)) return reply(NOT_ADMIN);
+    const result = await sendDirectUserMessage(env, db, m[1], m[2], "tg:" + tgId);
+    return reply(result.ok ? "✅ پیام اختصاصی ارسال شد." : "⚠️ " + result.error);
+  }
   m = text.match(/^\/user(?:@\S+)?\s+(\d{3,20})\s*$/i);
   if (m) return isAdmin(env, from.id) ? adminBotUser(env, db, chatId, m[1]) : reply(NOT_ADMIN);
   if (/^\/(panel|admin)(@\S+)?(\s|$)/i.test(text)) return isAdmin(env, from.id) ? adminPanelMenu(env, db, chatId, origin) : reply(NOT_ADMIN);
@@ -1020,7 +1060,26 @@ async function adminBotUser(env, db, chatId, id) {
   const ban = await db.prepare("SELECT reason FROM bans WHERE tg_id=?").bind(String(id)).first();
   const balance = await walletBalance(db, id);
   const expiry = sub && sub.until > Date.now() ? new Date(sub.until).toLocaleDateString("fa-IR", { timeZone: "Asia/Tehran" }) : "غیرفعال";
-  return tg(env, "sendMessage", { chat_id: chatId, text: `👤 کاربر ${id}\n⭐ اشتراک: ${expiry}\n💼 موجودی: ${fa(balance)} تومان\n🚫 وضعیت: ${ban ? "مسدود" : "فعال"}\n\nبرای تغییر موجودی، اشتراک یا وضعیت از پنل وب استفاده کنید.` });
+  return tg(env, "sendMessage", { chat_id: chatId, text: `👤 کاربر ${id}\n⭐ اشتراک: ${expiry}\n💼 موجودی: ${fa(balance)} تومان\n🚫 وضعیت: ${ban ? "مسدود" : "فعال"}\n\nبرای ارسال پیام اختصاصی بنویسید:\n/dm ${id} متن پیام\n\nبرای تغییر موجودی، اشتراک یا وضعیت از پنل وب استفاده کنید.` });
+}
+
+// ارسال به یک کاربر شناخته‌شده؛ متن محرمانه در گزارش فعالیت ثبت نمی‌شود.
+async function sendDirectUserMessage(env, db, id, raw, actor) {
+  const text = String(raw || "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim();
+  if (!/^\d{3,20}$/.test(String(id)) || !text || text.length > 3500) return { ok: false, error: "شناسه یا متن پیام نامعتبر است (حداکثر ۳۵۰۰ کاراکتر)." };
+  if (!env.BOT_TOKEN) return { ok: false, error: "توکن ربات تنظیم نشده است." };
+  const user = await db.prepare("SELECT tg_id FROM users WHERE tg_id=?").bind(String(id)).first();
+  if (!user) return { ok: false, error: "کاربر در سامانه پیدا نشد." };
+  if (!(await rateOk(db, "admin_direct:" + actor, 30, 60000))) return { ok: false, error: "تعداد پیام زیاد است؛ کمی صبر کنید." };
+  const result = await tg(env, "sendMessage", { chat_id: String(id), text }).catch(() => null);
+  await audit(db, actor, result?.ok ? "direct_message" : "direct_message_failed", String(id), "پیام اختصاصی").catch(() => {});
+  return result?.ok ? { ok: true } : { ok: false, error: "پیام به کاربر نرسید؛ ممکن است ربات را مسدود کرده باشد." };
+}
+async function adminDirectMessage(request, env) {
+  let b; try { b = await request.json(); } catch { return json({ error: "ورودی نامعتبر" }, 400); }
+  if (!b || typeof b.text !== "string" || typeof b.tg_id !== "string") return json({ error: "ورودی نامعتبر" }, 400);
+  const result = await sendDirectUserMessage(env, await getDB(env), b.tg_id, b.text, "admin");
+  return result.ok ? json(result) : json({ error: result.error }, 400);
 }
 
 // GET /api/admin/tg/auto?t=…  → سشن ادمین + هدایت به پنل (فقط توکنی که ربات برای ADMIN_TG_ID ساخته)
@@ -3290,6 +3349,7 @@ export default {
       if (p === "/api/auth/check" && request.method === "GET") return await authCheck(env, url);
       if (p === "/api/tg/webhook" && request.method === "POST") return await tgWebhook(request, env);
       if (p === "/api/track" && request.method === "POST") return await track(request, env);
+      if (p === "/api/admin/direct-message" && request.method === "POST") { const bad = await adminAuth(request, env); if (bad) return bad; return await adminDirectMessage(request, env); }
       if (p === "/api/admin/stats" && request.method === "GET") {
         const bad = await adminAuth(request, env); if (bad) return bad;
         return await adminStats(env);

@@ -57,9 +57,9 @@ test('mini app data stays scoped to signed user and file resend checks ownership
   sql.exec(`CREATE TABLE server_orders(id INTEGER PRIMARY KEY,tg_id TEXT,product TEXT,volume INTEGER,days INTEGER,users INTEGER,amount INTEGER,status TEXT,created INTEGER);
     CREATE TABLE server_deliveries(order_id INTEGER,source_chat TEXT,source_message INTEGER,created INTEGER,kind TEXT,file_name TEXT,file_id TEXT);
     CREATE TABLE wallet_log(id INTEGER PRIMARY KEY,tg_id TEXT,ts INTEGER,delta INTEGER,reason TEXT);
-    CREATE TABLE tickets(id INTEGER PRIMARY KEY,tg_id TEXT,status TEXT);
+    CREATE TABLE tickets(id INTEGER PRIMARY KEY,tg_id TEXT,status TEXT,category TEXT);
     CREATE TABLE ticket_msgs(id INTEGER PRIMARY KEY,ticket_id INTEGER,sender TEXT,text TEXT,ts INTEGER);`);
-  sql.exec("INSERT INTO server_orders VALUES(1,'123','multi',5,30,NULL,75000,'delivered',1),(2,'999','wire',5,30,NULL,100000,'delivered',1); INSERT INTO server_deliveries VALUES(1,'42',11,1,'document','a.conf','file-a'),(2,'42',22,1,'document','b.conf','file-b'); INSERT INTO wallet_log VALUES(1,'123',1,-75000,'server'),(2,'999',1,90000,'private'); INSERT INTO tickets VALUES(1,'123','open'),(2,'999','open'); INSERT INTO ticket_msgs VALUES(1,1,'admin','hello',1),(2,2,'admin','private',1);");
+  sql.exec("INSERT INTO server_orders VALUES(1,'123','multi',5,30,NULL,75000,'delivered',1),(2,'999','wire',5,30,NULL,100000,'delivered',1); INSERT INTO server_deliveries VALUES(1,'42',11,1,'document','a.conf','file-a'),(2,'42',22,1,'document','b.conf','file-b'); INSERT INTO wallet_log VALUES(1,'123',1,-75000,'server'),(2,'999',1,90000,'private'); INSERT INTO tickets VALUES(1,'123','open','general'),(2,'999','open','general'); INSERT INTO ticket_msgs VALUES(1,1,'admin','hello',1),(2,2,'admin','private',1);");
   const db = { prepare(q) { let args=[]; return { bind(...a) { args=a; return this; }, async first(){ return sql.prepare(q).get(...args) || null; }, async all(){ return { results: sql.prepare(q).all(...args) }; } }; } };
   const { context } = setup(); context.getDB = async () => db; context.SERVER_PRODUCTS = { multi: { name: 'multi' }, wire: { name: 'wire' } };
   const copied = []; context.tg = async (env, method, payload) => { copied.push(payload); return { ok: true }; };
@@ -82,15 +82,15 @@ test('mini config creation uses validated identity and the shared policy engine'
 });
 test('mini support stores ticket and links admin notification for replies', async () => {
   const { DatabaseSync } = require('node:sqlite'); const sql = new DatabaseSync(':memory:');
-  sql.exec(`CREATE TABLE tickets(id INTEGER PRIMARY KEY AUTOINCREMENT,tg_id TEXT,name TEXT,username TEXT,status TEXT,created INTEGER,updated INTEGER);
+  sql.exec(`CREATE TABLE tickets(id INTEGER PRIMARY KEY AUTOINCREMENT,tg_id TEXT,name TEXT,username TEXT,status TEXT,created INTEGER,updated INTEGER,category TEXT);
     CREATE TABLE ticket_msgs(id INTEGER PRIMARY KEY AUTOINCREMENT,ticket_id INTEGER,sender TEXT,text TEXT,ts INTEGER,admin_msg_id INTEGER);`);
   const db = { prepare(q) { let args=[]; return { bind(...a) { args=a; return this; }, async first(){ return sql.prepare(q).get(...args) || null; }, async run(){ const r=sql.prepare(q).run(...args); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; } }; } };
   const { context } = setup(); context.getDB = async () => db; context.adminTgId = env => env.ADMIN_TG_ID; context.TICKET_RATE = { win: 600000, max: 5 };
   context.tg = async () => ({ ok: true, result: { message_id: 55 } });
   const initData = signed({ auth_date: now(), user: '{"id":123,"first_name":"Ali"}' });
-  let r = await context.miniApi(request({ initData, action: 'ticket_send', text: 'سلام' }), { BOT_TOKEN: 'test:token', ADMIN_TG_ID: '42' });
+  let r = await context.miniApi(request({ initData, action: 'ticket_send', text: 'سلام', category: 'payment' }), { BOT_TOKEN: 'test:token', ADMIN_TG_ID: '42' });
   assert.equal(r.status, 200); assert.equal((await r.json()).notified, true);
-  assert.equal(sql.prepare('SELECT tg_id FROM tickets').get().tg_id, '123');
+  assert.equal(sql.prepare('SELECT tg_id FROM tickets').get().tg_id, '123'); assert.equal(sql.prepare('SELECT category FROM tickets').get().category, 'payment');
   const msg = sql.prepare('SELECT * FROM ticket_msgs').get(); assert.equal(msg.text, 'سلام'); assert.equal(msg.admin_msg_id, 55);
   r = await context.miniApi(request({ initData, action: 'ticket_send', text: '  ' }), { BOT_TOKEN: 'test:token', ADMIN_TG_ID: '42' }); assert.equal(r.status, 400);
 });
@@ -113,4 +113,21 @@ test('owned delivery file is returned as a private attachment without exposing t
   assert.equal(r.status, 200); assert(fetched.startsWith('https://api.telegram.org/file/bot'));
   assert.equal(await r.text(), 'hello'); assert.match(r.headers.get('content-disposition'), /profile\.conf/);
   assert.equal(r.headers.get('cache-control'), 'no-store'); assert(![...r.headers].some(([, value]) => value.includes('test:token')));
+});
+test('configuration presets are per user and store settings only, not generated secrets', async () => {
+  const { DatabaseSync } = require('node:sqlite'); const sql = new DatabaseSync(':memory:');
+  sql.exec('CREATE TABLE mini_config_presets(tg_id TEXT PRIMARY KEY, config TEXT, updated INTEGER)');
+  const db = { prepare(q) { let args=[]; return { bind(...a) { args=a; return this; }, async first(){ return sql.prepare(q).get(...args)||null; }, async run(){const r=sql.prepare(q).run(...args);return {meta:{changes:Number(r.changes)}};} }; } };
+  const { context } = setup(); context.getDB = async () => db; context.BOT_COUNTRIES = [{code:'tr'}]; context.BOT_MODES = {ranked:'ranked'}; context.BOT_ROLES = {attacker:'attacker'}; context.BOT_DNS = [{v:''}];
+  const one = signed({auth_date:now(),user:'{"id":123}'}), two = signed({auth_date:now(),user:'{"id":999}'}), env = { BOT_TOKEN:'test:token' };
+  let r = await context.miniApi(request({ initData:one, action:'config_preset_save', config:{region:'tr',mode:'ranked',role:'attacker',dns:'',mtu:'1280',name:'mine',config:'SECRET'} }),env);
+  assert.equal(r.status,200); assert(!sql.prepare('SELECT config FROM mini_config_presets').get().config.includes('SECRET'));
+  r = await context.miniApi(request({initData:two,action:'config_preset_get'}),env); assert.equal((await r.json()).config,null);
+  r = await context.miniApi(request({initData:one,action:'config_preset_get'}),env); assert.equal((await r.json()).config.name,'mine');
+});
+test('manual location status is labeled via stored entries', async () => {
+  const { context } = setup(); context.BOT_COUNTRIES=[{code:'tr',name:'ترکیه'}];
+  context.getDB=async()=>({prepare:()=>({async all(){return {results:[{code:'tr',level:'down',note:'بررسی',updated:123}]};}})});
+  const r=await context.miniApi(request({initData:signed({auth_date:now(),user:'{"id":123}'}),action:'locations'}),{BOT_TOKEN:'test:token'});
+  assert.equal(r.status,200); const data=await r.json(); assert.equal(data.locations[0].name,'ترکیه'); assert.equal(data.locations[0].level,'down');
 });
