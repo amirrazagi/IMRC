@@ -17,7 +17,7 @@ function setup() {
   const db = { prepare(query) { let values = []; return { bind(...v) { values = v; return this; }, async run() { const r = sql.prepare(query).run(...values); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }, async first() { return sql.prepare(query).get(...values) || null; } }; }, async batch(stmts) { sql.exec('BEGIN'); try { const results = []; for (const stmt of stmts) results.push(await stmt.run()); sql.exec('COMMIT'); return results; } catch(e) { sql.exec('ROLLBACK'); throw e; } } };
   const calls = [];
   let failPhoto = false;
-  const ctx = { console, db, calls, recordMiniNotice: async () => {}, walletBalance: async (db, id) => sql.prepare('SELECT balance FROM wallet WHERE tg_id=?').get(id)?.balance || 0, fa: n => String(n), randHex: () => 'a'.repeat(16), isBanned: async () => false, adminTgId: env => env.ADMIN_TG_ID, isAdmin: (env, id) => String(id) === env.ADMIN_TG_ID, getSettings: async () => ({ pay_text: 'CARD' }), stampReceipt: async () => {}, tg: async (env, method, payload) => { calls.push({ method, payload }); return method === 'sendPhoto' ? (failPhoto ? { ok: false } : { ok: true, result: { message_id: 55 } }) : { ok: true }; } };
+  const ctx = { console, db, calls, recordMiniNotice: async () => {}, notificationEnabled: async () => true, walletBalance: async (db, id) => sql.prepare('SELECT balance FROM wallet WHERE tg_id=?').get(id)?.balance || 0, fa: n => String(n), randHex: () => 'a'.repeat(16), isBanned: async () => false, adminTgId: env => env.ADMIN_TG_ID, isAdmin: (env, id) => String(id) === env.ADMIN_TG_ID, getSettings: async () => ({ pay_text: 'CARD' }), stampReceipt: async () => {}, tg: async (env, method, payload) => { calls.push({ method, payload }); return method === 'sendPhoto' ? (failPhoto ? { ok: false } : { ok: true, result: { message_id: 55 } }) : { ok: true }; } };
   vm.createContext(ctx);
   const source = fs.readFileSync('worker.js', 'utf8');
   vm.runInContext(source.slice(source.indexOf('// سفارش سرور:'), source.indexOf('// ===== کیف پول:')) + source.slice(source.indexOf('// همه تغییرات مالی'), source.indexOf('// پرداخت اشتراک فقط')), ctx);
@@ -198,4 +198,17 @@ test('server order payment and delivery notify user in Telegram', async () => {
   assert.equal(record.kind, 'document'); assert.equal(record.file_id, 'cfg'); assert.equal(record.file_name, 'profile.conf');
   await ctx.serverDecide(env, db, cq, 1, 'd', async () => {});
   assert(calls.some(c => c.payload.chat_id === '7' && c.payload.text?.includes('تحویل داده شد')));
+});
+test('order status notifications can be disabled without suppressing delivery or preventing closure', async () => {
+  const {ctx,db,sql,calls,env,msg}=setup();
+  ctx.notificationEnabled=async()=>false;
+  await ctx.serverChoose(env,db,7,'7','wire'); await ctx.serverInput(env,db,msg,'5'); await ctx.serverInput(env,db,msg,'10'); await ctx.serverReceipt(env,db,msg);
+  const order=sql.prepare('SELECT * FROM server_orders').get();
+  await ctx.serverDecide(env,db,{from:{id:99}},order.id,'a',async()=>{});
+  assert(!calls.some(c=>c.method==='sendMessage' && c.payload.text.includes('پرداخت سفارش سرور')));
+  await ctx.serverDelivery(env,db,{chat:{id:99},from:{id:99},message_id:100,document:{file_id:'config'},reply_to_message:{message_id:55}});
+  assert(calls.some(c=>c.method==='copyMessage'));
+  await ctx.serverDecide(env,db,{from:{id:99}},order.id,'d',async()=>{});
+  assert.equal(sql.prepare('SELECT status FROM server_orders').get().status,'delivered');
+  assert(!calls.some(c=>c.method==='sendMessage' && c.payload.text.includes('تحویل داده شد و بسته شد')));
 });

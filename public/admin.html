@@ -645,7 +645,7 @@ async function openTicket(id,silent){
 }
 async function replyTicket(){
   const text=$("tReply").value.trim();if(!text)return;
-  try{const d=await post("/api/admin/ticket",{id:window._tid,action:"reply",text});$("tReply").value="";if(!d.delivered)alert("⚠️ ذخیره شد ولی به کاربر نرسید (احتمالاً ربات رو بلاک کرده).");openTicket(window._tid);loadTickets()}catch(e){alert("❌ "+e.message)}
+  try{const d=await post("/api/admin/ticket",{id:window._tid,action:"reply",text});$("tReply").value="";if(d.notifications_disabled)alert("✅ پاسخ ذخیره شد؛ اعلان تلگرام توسط کاربر خاموش است.");else if(!d.delivered)alert("⚠️ ذخیره شد ولی به کاربر نرسید (احتمالاً ربات رو بلاک کرده).");openTicket(window._tid);loadTickets()}catch(e){alert("❌ "+e.message)}
 }
 async function closeTicket(){
   if(!confirm("این تیکت بسته بشه؟"))return;
@@ -918,7 +918,7 @@ async function sendChatReply(){
     const d = await post("/api/admin/chat/reply", { tg: chTg, text: text });
     $("chReply").value = "";
     updateChReplyCount();
-    if (!d.delivered) alert("⚠️ پاسخ ذخیره شد، ولی به تلگرام کاربر نرسید (احتمالاً ربات را بلاک کرده).");
+    if (d.notifications_disabled) alert("✅ پاسخ ذخیره شد؛ اعلان تلگرام توسط کاربر خاموش است."); else if (!d.delivered) alert("⚠️ پاسخ ذخیره شد، ولی به تلگرام کاربر نرسید (احتمالاً ربات را بلاک کرده).");
     await openChat(chTg);
     loadChatThreads();
   }catch(e){ alert("❌ " + e.message); }

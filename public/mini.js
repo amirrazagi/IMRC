@@ -52,8 +52,8 @@
     } catch (error) { empty(box, errorMessage(error)); }
   }
   async function loadNotices() { const box=$('notices-content'); empty(box,'در حال دریافت اعلان‌ها...'); try { const data=await request('notifications'); box.replaceChildren(); if (!data.notices.length) return empty(box,'هنوز اعلان جدیدی ثبت نشده است.'); data.notices.forEach(n => { const card=element('article',null,'detail-card'); card.append(element('p',n.text),element('p',date(n.ts))); box.append(card); }); } catch(e) { empty(box,errorMessage(e)); } }
-  async function loadReminder() { try { const data=await request('reminder_get'); $('reminder-days').value=data.days; } catch(e) { notify(errorMessage(e)); } }
-  $('reminder-form').addEventListener('submit', async e => { e.preventDefault(); if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); const days=Number($('reminder-days').value); try { await request('reminder_save',{days}); notify(days ? `یادآوری ${number(days)} روز پیش از انقضا تنظیم شد.` : 'یادآوری انقضا غیرفعال شد.'); } catch(err) { notify(errorMessage(err)); } });
+  async function loadReminder() { try { const [data,prefs]=await Promise.all([request('reminder_get'),request('notification_preferences_get')]); $('reminder-days').value=data.days; $('notify-ticket').checked=prefs.ticket; $('notify-order').checked=prefs.orders; } catch(e) { notify(errorMessage(e)); } }
+  $('reminder-form').addEventListener('submit', async e => { e.preventDefault(); if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); const days=Number($('reminder-days').value); try { await request('notification_preferences_save',{ticket:$('notify-ticket').checked,orders:$('notify-order').checked}); await request('reminder_save',{days}); notify(days ? `یادآوری ${number(days)} روز پیش از انقضا تنظیم شد.` : 'یادآوری انقضا غیرفعال شد.'); } catch(err) { notify(errorMessage(err)); } });
   async function loadOrders() {
     const box = $('orders-content'); empty(box, 'در حال دریافت سفارش‌ها...');
     try {
@@ -75,6 +75,13 @@
           const invoiceText = [`صورت‌حساب سفارش #${order.id}`, `سرویس: ${order.product_name}`, `جزئیات: ${detail}`, `مدت: ${order.days} روز`, `مبلغ: ${order.amount} تومان`, `روش پرداخت: ${order.payment_method === 'wallet' ? 'کیف پول' : 'رسید کارت‌به‌کارت (وضعیت تأیید در بخش وضعیت)' }`, `وضعیت: ${statuses[order.status] || 'در حال بررسی'}`, `تاریخ ثبت: ${date(order.created)}`, 'این صورت‌حساب صرفاً اطلاعات سفارش ثبت‌شده است.'].join('\n');
           download(new Blob([invoiceText], {type:'text/plain;charset=utf-8'}), `imrc-order-${order.id}.txt`);
         }); card.append(invoice);
+        const imageButton = element('button', 'دانلود کارت عمومی سرویس ↓'); imageButton.type = 'button'; imageButton.addEventListener('click', () => {
+          const canvas = document.createElement('canvas'); canvas.width = 1200; canvas.height = 630; const ctx = canvas.getContext('2d');
+          ctx.fillStyle = '#10162a'; ctx.fillRect(0, 0, canvas.width, canvas.height); ctx.fillStyle = '#8ce2c5'; ctx.font = 'bold 44px sans-serif'; ctx.textAlign = 'right'; ctx.fillText('IMRC | کارت عمومی سرویس', 1120, 110);
+          ctx.fillStyle = '#ffffff'; ctx.font = 'bold 58px sans-serif'; ctx.fillText(order.product_name, 1120, 235); ctx.font = '42px sans-serif'; ctx.fillText(`${detail} · ${number(order.days)} روز`, 1120, 325); ctx.fillText(statuses[order.status] || 'در حال بررسی', 1120, 400);
+          ctx.fillStyle = '#aab5ca'; ctx.font = '30px sans-serif'; ctx.fillText('بدون فایل، اطلاعات اتصال یا مشخصات حساب', 1120, 540);
+          canvas.toBlob(blob => { if (blob) download(blob, `imrc-service-${order.id}.png`); else notify('ساخت تصویر ناموفق بود.'); }, 'image/png');
+        }); card.append(imageButton);
         if (order.files.length) {
           const files = element('div', null, 'line'); files.append(element('p', 'فایل‌ها و پیام‌های تحویلی'));
           order.files.forEach(file => {

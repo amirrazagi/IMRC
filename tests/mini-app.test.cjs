@@ -154,3 +154,18 @@ test('reminder choices reject invalid days and are scoped to the signed user', a
   assert.equal((await (await context.miniApi(request({initData:one,action:'reminder_get'}),env)).json()).days,0);
   assert.equal((await (await context.miniApi(request({initData:two,action:'reminder_get'}),env)).json()).days,3);
 });
+test('notification preferences default on, validate booleans and are isolated per user', async () => {
+  const { DatabaseSync } = require('node:sqlite'); const sql=new DatabaseSync(':memory:');
+  sql.exec('CREATE TABLE notification_preferences(tg_id TEXT PRIMARY KEY,ticket INTEGER NOT NULL DEFAULT 1,orders INTEGER NOT NULL DEFAULT 1)');
+  const db={prepare(q){let args=[];return {bind(...a){args=a;return this},async first(){return sql.prepare(q).get(...args)||null},async run(){const r=sql.prepare(q).run(...args);return {meta:{changes:Number(r.changes)}}}}}};
+  const {context}=setup();context.getDB=async()=>db;
+  const env={BOT_TOKEN:'test:token'},one=signed({auth_date:now(),user:'{"id":123}'}),two=signed({auth_date:now(),user:'{"id":999}'});
+  async function run(initData,action,data={}) { return context.miniApi(request({initData,action,...data}),env) }
+  assert.deepEqual(await (await run(one,'notification_preferences_get')).json(),{ticket:true,orders:true});
+  assert.equal((await run(one,'notification_preferences_save',{ticket:'false',orders:true})).status,400);
+  assert.equal((await run(one,'notification_preferences_save',{ticket:false,orders:true})).status,200);
+  assert.deepEqual(await (await run(one,'notification_preferences_get')).json(),{ticket:false,orders:true});
+  assert.deepEqual(await (await run(two,'notification_preferences_get')).json(),{ticket:true,orders:true});
+  assert.equal(await context.notificationEnabled(db,'123','ticket'),false);
+  assert.equal(await context.notificationEnabled(db,'123','orders'),true);
+});
