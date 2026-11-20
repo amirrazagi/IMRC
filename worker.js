@@ -132,6 +132,18 @@ function getDB(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS notification_preferences(tg_id TEXT PRIMARY KEY, ticket INTEGER NOT NULL DEFAULT 1, orders INTEGER NOT NULL DEFAULT 1)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS mini_notices(id INTEGER PRIMARY KEY AUTOINCREMENT,tg_id TEXT NOT NULL,ts INTEGER NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL)"),
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_mini_notices_tg ON mini_notices(tg_id,id)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS points(tg_id TEXT PRIMARY KEY, balance INTEGER NOT NULL DEFAULT 0)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS points_log(id INTEGER PRIMARY KEY AUTOINCREMENT, tg_id TEXT NOT NULL, ts INTEGER NOT NULL, delta INTEGER NOT NULL, reason TEXT NOT NULL)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS points_redeems(token TEXT PRIMARY KEY, tg_id TEXT NOT NULL, points INTEGER NOT NULL, amount INTEGER NOT NULL, status TEXT NOT NULL, created INTEGER NOT NULL)"),
+        env.DB.prepare(`CREATE TABLE IF NOT EXISTS personal_codes(
+          code TEXT PRIMARY KEY, tg_id TEXT NOT NULL, percent INTEGER NOT NULL, max_uses INTEGER DEFAULT 0,
+          used INTEGER DEFAULT 0, expires INTEGER, min_amount INTEGER DEFAULT 0, active INTEGER DEFAULT 1, created INTEGER NOT NULL)`),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_personal_codes_tg ON personal_codes(tg_id)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS gift_drafts(token TEXT PRIMARY KEY,buyer TEXT NOT NULL,recipient TEXT NOT NULL,created INTEGER NOT NULL)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS gift_quotes(token TEXT PRIMARY KEY,draft_token TEXT NOT NULL,buyer TEXT NOT NULL,recipient TEXT NOT NULL,plan TEXT NOT NULL,plan_name TEXT NOT NULL,days INTEGER NOT NULL,amount INTEGER NOT NULL,created INTEGER NOT NULL)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS gifts(token TEXT PRIMARY KEY,draft_token TEXT NOT NULL UNIQUE,buyer TEXT NOT NULL,recipient TEXT NOT NULL,plan TEXT NOT NULL,plan_name TEXT NOT NULL,days INTEGER NOT NULL,amount INTEGER NOT NULL,status TEXT NOT NULL,created INTEGER NOT NULL,decided INTEGER)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_gifts_recipient ON gifts(recipient,status,created)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_gifts_buyer ON gifts(buyer,created)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS wallet(tg_id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)"),
         env.DB.prepare(`CREATE TABLE IF NOT EXISTS wallet_quotes(
           token TEXT PRIMARY KEY, tg_id TEXT NOT NULL, kind TEXT NOT NULL, amount INTEGER NOT NULL,
@@ -568,7 +580,8 @@ async function sendMainMenu(env, db, chatId, isAdminUser, text) {
     [{ text: "🌐 ورود به پنل", url: panelUrl }, { text: "💼 کیف پول و شارژ", callback_data: "menu:wallet" }],
     [{ text: "👤 حساب من", callback_data: "menu:me" }, { text: "📂 کانفیگ‌های من", callback_data: "menu:configs" }],
     [{ text: "🎁 دعوت دوستان", callback_data: "menu:invite" }, { text: "🎫 پشتیبانی", callback_data: "menu:support" }],
-    [{ text: "🎟 کد تخفیف", callback_data: "menu:code" }],
+    [{ text: "🎟 کد تخفیف", callback_data: "menu:code" }, { text: "🎁 خرید اشتراک هدیه", callback_data: "menu:gift" }],
+    [{ text: "⭐ امتیاز من", callback_data: "menu:points" }],
     [{ text: "✨ مینی‌اپ IMRC", web_app: { url: panelUrl + "/mini" } }],
   ];
   if (isAdminUser) keyboard.push([{ text: "🛠 پنل مدیریت", callback_data: "menu:admin" }, { text: "🎫 تیکت‌های باز", callback_data: "menu:tickets" }]);
@@ -910,6 +923,11 @@ async function handleText(env, db, msg, text, origin) {
   }
   if (/^\/menu(@\S+)?(\s|$)/i.test(text)) return sendMainMenu(env, db, chatId, isAdmin(env, from.id), null);
   if (/^\/plans(\s|$)/.test(text)) return sendPlans(env, db, chatId);
+  m = text.match(/^\/gift(?:@\S+)?\s+(\d{3,20})\s*$/i);
+  if (m) return giftStart(env, db, tgId, m[1]);
+  if (/^\/gift(?:@\S+)?\s*$/i.test(text)) return reply("🎁 برای خرید هدیه جدید، شناسه عددی دریافت‌کننده را بفرست: /gift 123456789\nگیرنده باید قبلاً ربات را شروع کرده باشد. پرداخت فقط با کیف پول است.");
+  if (/^\/gifts(?:@\S+)?\s*$/i.test(text)) return giftList(env, db, tgId);
+  if (/^\/points(?:@\S+)?\s*$/i.test(text)) return sendPoints(env, db, chatId, tgId);
   if (/^\/server(@\S+)?(\s|$)/i.test(text)) return sendServerShop(env, chatId);
   m = text.match(/^\/wallet(?:@\S+)?(?:\s+([\s\S]+))?$/i);
   if (m) return sendWallet(env, db, chatId, tgId, (m[1] || "").trim());
@@ -975,6 +993,10 @@ async function handleCallback(env, db, cq, origin) {
     await answer();
     return verifyLogin(env, db, chk[1], cq.from, cq.from.id);
   }
+  const giftChoice = data.match(/^gf:s:([a-f0-9]{16}):([a-z0-9_]{1,16})$/);
+  if (giftChoice) { await answer(); return giftChoose(env, db, String(cq.from.id), giftChoice[1], giftChoice[2]); }
+  const giftAction = data.match(/^gf:([par]):([a-f0-9]{16})$/);
+  if (giftAction) { await answer(); return giftAction[1] === "p" ? giftPay(env, db, String(cq.from.id), giftAction[2]) : giftDecide(env, db, String(cq.from.id), giftAction[2], giftAction[1] === "a"); }
   const serverSelect = data.match(/^sv:([a-z]+)$/);
   if (serverSelect) { await answer(); return serverChoose(env, db, chatId, String(cq.from.id), serverSelect[1]); }
   const serverUsers = data.match(/^su:([a-f0-9]{16}):([123])$/);
@@ -995,6 +1017,9 @@ async function handleCallback(env, db, cq, origin) {
   }
   if (data === "menu:server") { await answer(); return sendServerShop(env, chatId); }
   if (data === "menu:configs") { await answer(); return sendMyConfigs(env, db, chatId, String(cq.from.id)); }
+  if (data === "menu:points") { await answer(); return sendPoints(env, db, chatId, String(cq.from.id)); }
+  if (data === "pts:r") { await answer("در حال تبدیل…"); return pointsRedeem(env, db, chatId, String(cq.from.id)); }
+  if (data === "menu:gift") { await answer(); return tg(env, "sendMessage", { chat_id: cq.from.id, text: "🎁 برای خرید اشتراک جدید برای دوستت بفرست: /gift شناسه_عددی\nگیرنده باید قبلاً ربات را شروع کرده باشد. پرداخت از کیف پول است؛ هدیه تا تأیید گیرنده فعال نمی‌شود. فهرست هدایا: /gifts" }).catch(() => {}); }
   if (data === "menu:code") { await answer(); return tg(env, "sendMessage", { chat_id: chatId, text: "برای ثبت کد تخفیف بفرست:\n/code کد_تخفیف" }).catch(() => {}); }
   if (data === "menu:admin" || data === "menu:tickets") {
     if (!isAdmin(env, cq.from.id)) return answer("⛔ فقط ادمین");
@@ -1276,6 +1301,10 @@ async function onFirstLogin(env, db, tgId) {
     const when = new Date(until).toLocaleDateString("fa-IR", { timeZone: "Asia/Tehran" });
     lines.push(`${fa(st.ref_days)} روز اشتراک رایگان گرفتی. اعتبار اشتراکت تا ${when}`);
   }
+  if (st.points_enabled && st.points_invite > 0) {
+    await pointsAdd(db, ref.referrer, st.points_invite, "دعوت دوست");
+    lines.push(`⭐ ${fa(st.points_invite)} امتیاز بابت دعوت به باشگاه امتیاز اضافه شد.`);
+  }
   if (st.ref_credit > 0) {
     const bal = await walletCredit(db, ref.referrer, st.ref_credit, "پاداش دعوت");
     lines.push(`💳 ${fa(st.ref_credit)} تومان اعتبار به کیف پولت اضافه شد (موجودی: ${fa(bal)} تومان).`);
@@ -1302,6 +1331,127 @@ async function sendInvite(env, db, chatId, tgId) {
     chat_id: chatId,
     text: `${head}\n\n🔗 لینک تو:\nhttps://t.me/${bot}?start=ref_${tgId}\n\n👥 تا الان ${fa(cnt)} نفر دعوت کردی.`,
   }).catch(() => {});
+}
+
+// باشگاه امتیاز: پیش‌فرض غیرفعال است و ادمین نرخ و ارزش هر امتیاز را تعیین می‌کند.
+async function pointsAdd(db, tgId, delta, reason) {
+  if (!(delta > 0)) return 0;
+  const id = String(tgId);
+  await db.batch([
+    db.prepare("INSERT INTO points(tg_id,balance) VALUES(?,?) ON CONFLICT(tg_id) DO UPDATE SET balance=balance+excluded.balance").bind(id, delta),
+    db.prepare("INSERT INTO points_log(tg_id,ts,delta,reason) VALUES(?,?,?,?)").bind(id, Date.now(), delta, clean(reason, 80)),
+  ]);
+  return delta;
+}
+async function pointsBalance(db, tgId) {
+  const r = await db.prepare("SELECT balance FROM points WHERE tg_id=?").bind(String(tgId)).first();
+  return r ? Math.max(0, r.balance) : 0;
+}
+async function pointsAward(db, tgId, toman, reason) {
+  try {
+    const st = await getSettings(db);
+    if (!st.points_enabled || !(toman > 0) || !st.points_rate) return 0;
+    const pts = Math.floor((toman * st.points_rate) / 1000);
+    return await pointsAdd(db, tgId, pts, reason);
+  } catch { return 0; }
+}
+async function sendPoints(env, db, chatId, tgId) {
+  const st = await getSettings(db);
+  const bal = await pointsBalance(db, tgId);
+  if (!st.points_enabled) return tg(env, "sendMessage", { chat_id: chatId, text: "⭐ باشگاه امتیاز فعلاً غیرفعال است." }).catch(() => {});
+  const value = bal * st.points_value;
+  const text = `⭐ باشگاه امتیاز\n\nموجودی: ${fa(bal)} امتیاز\nارزش فعلی: ${fa(value)} تومان اعتبار کیف پول\n\nبا هر ${fa(1000)} تومان خرید، ${fa(st.points_rate)} امتیاز و با هر دعوت موفق ${fa(st.points_invite)} امتیاز می‌گیری. حداقل تبدیل ${fa(st.points_min)} امتیاز است؛ امتیاز فقط به اعتبار کیف پول تبدیل می‌شود و قابل برداشت نقدی نیست.`;
+  const kb = bal > 0 && bal >= st.points_min ? { inline_keyboard: [[{ text: `تبدیل ${fa(bal)} امتیاز به ${fa(value)} تومان`, callback_data: "pts:r" }]] } : undefined;
+  return tg(env, "sendMessage", { chat_id: chatId, text, ...(kb ? { reply_markup: kb } : {}) }).catch(() => {});
+}
+async function pointsRedeem(env, db, chatId, tgId) {
+  const st = await getSettings(db);
+  const bal = await pointsBalance(db, tgId);
+  const fail = (t) => tg(env, "sendMessage", { chat_id: chatId, text: t }).catch(() => {});
+  if (!st.points_enabled) return fail("⭐ باشگاه امتیاز غیرفعال است.");
+  if (bal <= 0 || bal < st.points_min) return fail(`⚠️ حداقل ${fa(st.points_min)} امتیاز برای تبدیل لازم است. موجودی: ${fa(bal)}`);
+  const amount = bal * st.points_value, token = randHex(8), now = Date.now();
+  const gate = "EXISTS(SELECT 1 FROM points_redeems WHERE token=? AND status='processing')";
+  const res = await db.batch([
+    db.prepare(`INSERT OR IGNORE INTO points_redeems(token,tg_id,points,amount,status,created)
+      SELECT ?,?,?,?, 'processing',? WHERE ?>=? AND EXISTS(SELECT 1 FROM points WHERE tg_id=? AND balance>=?)`)
+      .bind(token, String(tgId), bal, amount, now, bal, st.points_min, String(tgId), bal),
+    db.prepare(`UPDATE points SET balance=balance-? WHERE tg_id=? AND ${gate}`).bind(bal, String(tgId), token),
+    db.prepare(`INSERT INTO wallet(tg_id,balance) SELECT ?,? WHERE ${gate} ON CONFLICT(tg_id) DO UPDATE SET balance=balance+excluded.balance`).bind(String(tgId), amount, token),
+    db.prepare(`INSERT INTO wallet_log(tg_id,ts,delta,reason) SELECT ?,?,?,? WHERE ${gate}`).bind(String(tgId), now, amount, `تبدیل ${bal} امتیاز`, token),
+    db.prepare(`INSERT INTO points_log(tg_id,ts,delta,reason) SELECT ?,?,?,? WHERE ${gate}`).bind(String(tgId), now, -bal, "تبدیل به اعتبار کیف پول", token),
+    db.prepare("UPDATE points_redeems SET status='done' WHERE token=? AND status='processing'").bind(token),
+  ]);
+  if (!res[0].meta.changes) return fail("⚠️ تبدیل انجام نشد؛ موجودی امتیاز تغییر کرده است. دوباره تلاش کن.");
+  const wallet = await walletBalance(db, tgId);
+  return tg(env, "sendMessage", { chat_id: chatId, text: `✅ ${fa(bal)} امتیاز به ${fa(amount)} تومان اعتبار کیف پول تبدیل شد.\n💼 موجودی کیف پول: ${fa(wallet)} تومان` }).catch(() => {});
+}
+
+// خرید هدیه اشتراک جدید با کیف پول؛ پذیرش و برگشت وجه به صورت اتمیک انجام می‌شود.
+async function giftMessage(env, id, text, extra = {}) {
+  return tg(env, "sendMessage", { chat_id: id, text, ...extra }).catch(() => ({ ok: false }));
+}
+async function giftStart(env, db, buyer, recipient) {
+  if (buyer === recipient || await isBanned(db, buyer) || await isBanned(db, recipient)) return giftMessage(env, buyer, "⚠️ گیرنده نامعتبر یا مسدود است.");
+  if (!await db.prepare("SELECT tg_id FROM users WHERE tg_id=?").bind(recipient).first()) return giftMessage(env, buyer, "⚠️ گیرنده باید ابتدا ربات را شروع کند و شناسه عددی درست وارد شود.");
+  const st = await getSettings(db), token = randHex(8), now = Date.now();
+  await db.prepare("INSERT INTO gift_drafts(token,buyer,recipient,created) VALUES(?,?,?,?)").bind(token,buyer,recipient,now).run();
+  return giftMessage(env, buyer, `🎁 خرید اشتراک جدید برای ${recipient}\nیک پلن انتخاب کن. پرداخت کامل از کیف پول پس از تأیید جداگانه انجام می‌شود.`, {reply_markup:{inline_keyboard:st.plans.map(p=>[{text:`${p.name} · ${fa(p.days)} روز · ${fa(p.price)} تومان`,callback_data:`gf:s:${token}:${p.key}`}])}});
+}
+async function giftChoose(env, db, buyer, token, key) {
+  const draft = await db.prepare("SELECT * FROM gift_drafts WHERE token=? AND buyer=? AND created>?").bind(token,buyer,Date.now()-PENDING_MS).first();
+  if (!draft || await db.prepare("SELECT token FROM gifts WHERE draft_token=?").bind(token).first()) return giftMessage(env,buyer,"⚠️ این انتخاب منقضی شده یا قبلاً پرداخت شده است؛ دوباره /gift را شروع کن.");
+  const plan = (await getSettings(db)).plans.find(p=>p.key===key);
+  if (!plan) return giftMessage(env,buyer,"⚠️ پلن در دسترس نیست.");
+  const quote = randHex(8);
+  await db.prepare("INSERT INTO gift_quotes(token,draft_token,buyer,recipient,plan,plan_name,days,amount,created) VALUES(?,?,?,?,?,?,?,?,?)").bind(quote,token,buyer,draft.recipient,plan.key,plan.name,plan.days,plan.price,Date.now()).run();
+  return giftMessage(env,buyer,`🎁 اشتراک هدیه ${plan.name}، ${fa(plan.days)} روز برای ${draft.recipient}\n💰 مبلغ کامل: ${fa(plan.price)} تومان از کیف پول.\nگیرنده باید هدیه را بپذیرد؛ در صورت رد، مبلغ به کیف پول شما بازمی‌گردد.`,{reply_markup:{inline_keyboard:[[{text:"💼 تأیید و پرداخت کامل",callback_data:`gf:p:${quote}`}]]}});
+}
+async function giftPay(env, db, buyer, token) {
+  const q = await db.prepare("SELECT * FROM gift_quotes WHERE token=? AND buyer=?").bind(token,buyer).first();
+  if (!q) return giftMessage(env,buyer,"⚠️ صورت‌حساب پیدا نشد.");
+  const now = Date.now(), active = "EXISTS(SELECT 1 FROM gifts WHERE token=? AND status='processing')";
+  const res = await db.batch([
+    db.prepare(`INSERT OR IGNORE INTO gifts(token,draft_token,buyer,recipient,plan,plan_name,days,amount,status,created)
+      SELECT q.token,q.draft_token,q.buyer,q.recipient,q.plan,q.plan_name,q.days,q.amount,'processing',? FROM gift_quotes q JOIN gift_drafts d ON d.token=q.draft_token AND d.buyer=q.buyer AND d.recipient=q.recipient
+      WHERE q.token=? AND q.buyer=? AND q.created>? AND d.created>? AND q.buyer<>q.recipient AND q.days BETWEEN 1 AND 3650 AND q.amount BETWEEN 0 AND 100000000
+      AND EXISTS(SELECT 1 FROM users WHERE tg_id=q.recipient) AND NOT EXISTS(SELECT 1 FROM bans WHERE tg_id IN (q.buyer,q.recipient))
+      AND EXISTS(SELECT 1 FROM wallet WHERE tg_id=q.buyer AND balance>=q.amount)`)
+      .bind(now,token,buyer,now-PENDING_MS,now-PENDING_MS),
+    db.prepare(`UPDATE wallet SET balance=balance-? WHERE tg_id=? AND ${active}`).bind(q.amount,buyer,token),
+    db.prepare(`INSERT INTO wallet_log(tg_id,ts,delta,reason) SELECT ?,?,?,? WHERE ${active}`).bind(buyer,now,-q.amount,`خرید هدیه #${token}`,token),
+    db.prepare("UPDATE gifts SET status='pending' WHERE token=? AND status='processing'").bind(token),
+  ]);
+  if (!res[0].meta.changes) return giftMessage(env,buyer,"⚠️ پرداخت انجام نشد: موجودی کافی نیست یا صورت‌حساب منقضی/پرداخت شده است. وضعیت را با /gifts بررسی کن.");
+  const sent = await giftInvite(env, q);
+  return giftMessage(env,buyer,`✅ مبلغ ${fa(q.amount)} تومان پرداخت شد. هدیه در انتظار تأیید گیرنده است.${sent.ok ? "" : "\n⚠️ اعلان نرسید؛ گیرنده می‌تواند پس از شروع ربات با /gifts هدیه را ببیند."}`);
+}
+async function giftInvite(env, g) {
+  return giftMessage(env,g.recipient,`🎁 یک اشتراک هدیه جدید از ${g.buyer} دریافت کردی: ${g.plan_name}، ${fa(g.days)} روز. فقط با پذیرش تو فعال می‌شود؛ رد هدیه مبلغ را به کیف پول خریدار برمی‌گرداند.`,{reply_markup:{inline_keyboard:[[{text:"✅ پذیرش هدیه",callback_data:`gf:a:${g.token}`},{text:"❌ رد هدیه",callback_data:`gf:r:${g.token}`}]]}});
+}
+async function giftDecide(env, db, recipient, token, accept) {
+  const g = await db.prepare("SELECT * FROM gifts WHERE token=? AND recipient=?").bind(token,recipient).first();
+  if (!g) return giftMessage(env,recipient,"⚠️ هدیه پیدا نشد.");
+  const now=Date.now(), status=accept?"accepting":"refunding";
+  const gate="EXISTS(SELECT 1 FROM gifts WHERE token=? AND status=?)";
+  const stmts=[db.prepare(`UPDATE gifts SET status=?,decided=? WHERE token=? AND recipient=? AND status='pending' AND (?=0 OR NOT EXISTS(SELECT 1 FROM bans WHERE tg_id=?))`).bind(status,now,token,recipient,accept?1:0,recipient)];
+  if (accept) {
+    stmts.push(db.prepare(`INSERT INTO subs(tg_id,until) SELECT ?,? WHERE ${gate} ON CONFLICT(tg_id) DO UPDATE SET until=MAX(subs.until,?)+?`).bind(recipient,now+g.days*86400000,token,status,now,g.days*86400000));
+  } else {
+    stmts.push(db.prepare(`INSERT INTO wallet(tg_id,balance) SELECT ?,? WHERE ${gate} ON CONFLICT(tg_id) DO UPDATE SET balance=balance+excluded.balance`).bind(g.buyer,g.amount,token,status));
+    stmts.push(db.prepare(`INSERT INTO wallet_log(tg_id,ts,delta,reason) SELECT ?,?,?,? WHERE ${gate}`).bind(g.buyer,now,g.amount,`بازگشت هدیه #${token}`,token,status));
+  }
+  stmts.push(db.prepare("UPDATE gifts SET status=? WHERE token=? AND status=?").bind(accept?"accepted":"rejected",token,status));
+  const result=await db.batch(stmts);
+  if (!result[0].meta.changes) return giftMessage(env,recipient,"⚠️ هدیه قبلاً بررسی شده یا امکان پذیرش وجود ندارد. وضعیت را با /gifts ببین.");
+  await giftMessage(env,g.buyer,accept?`✅ گیرنده هدیه ${g.plan_name} را پذیرفت.`:`↩️ هدیه رد شد و ${fa(g.amount)} تومان به کیف پولت برگشت.`);
+  return giftMessage(env,recipient,accept?`✅ هدیه پذیرفته شد و ${fa(g.days)} روز اشتراک به حساب تو اضافه شد.`:"✅ هدیه رد شد و مبلغ به کیف پول خریدار بازگشت.");
+}
+async function giftList(env, db, id) {
+  const pending=(await db.prepare("SELECT * FROM gifts WHERE recipient=? AND status='pending' ORDER BY created DESC LIMIT 20").bind(id).all()).results || [];
+  const sent=(await db.prepare("SELECT recipient,plan_name,days,status FROM gifts WHERE buyer=? ORDER BY created DESC LIMIT 20").bind(id).all()).results || [];
+  await giftMessage(env,id,`🎁 هدیه‌های دریافتی منتظر پاسخ: ${fa(pending.length)}\nهدیه‌های ارسالی اخیر:\n${sent.map(g=>`• ${g.plan_name} برای ${g.recipient}: ${{pending:'منتظر پاسخ',accepted:'پذیرفته',rejected:'رد و بازگشت وجه'}[g.status]||'در حال پردازش'}`).join("\n") || "—"}`);
+  for (const g of pending) await giftInvite(env,g);
 }
 
 // سفارش سرور: قیمت‌های فعلی فروشگاه به تومان، مستقل از تعداد روز.
@@ -1554,16 +1704,25 @@ async function sendPlans(env, db, chatId) {
 }
 
 // کد تخفیف فعال (یا null)
-async function activeCode(db, code) {
+// کد تخفیف عمومی یا شخصی فعال (یا null). کد شخصی فقط برای صاحبش معتبر است.
+async function activeCode(db, code, tgId) {
   if (!code) return null;
-  const r = await db.prepare("SELECT code,percent,max_uses,used,expires,active FROM discount_codes WHERE code=?").bind(code).first();
-  if (!r || !r.active || (r.expires && r.expires < Date.now()) || (r.max_uses > 0 && r.used >= r.max_uses)) return null;
-  return r;
+  const now = Date.now();
+  const r = await db.prepare("SELECT code,percent,max_uses,used,expires,active,0 min_amount,0 personal FROM discount_codes WHERE code=?").bind(code).first();
+  if (r && r.active && !(r.expires && r.expires < now) && !(r.max_uses > 0 && r.used >= r.max_uses)) return r;
+  if (!tgId) return null;
+  const p = await db.prepare("SELECT code,percent,max_uses,used,expires,active,min_amount,1 personal FROM personal_codes WHERE code=? AND tg_id=?").bind(code, String(tgId)).first();
+  if (p && p.active && !(p.expires && p.expires < now) && !(p.max_uses > 0 && p.used >= p.max_uses)) return p;
+  return null;
 }
+// شرط حداقل مبلغ خرید کد شخصی؛ اگر برقرار نباشد کد اعمال نمی‌شود.
+const codeApplies = (row, plan) => !!row && (!row.min_amount || plan.price >= row.min_amount);
 const priceAfter = (plan, row) => (row ? Math.round(plan.price * (100 - row.percent) / 100) : plan.price);
-async function pendingCode(db, tgId) {
+async function pendingCode(db, tgId, plan) {
   const p = await db.prepare("SELECT code FROM pending_buy WHERE tg_id=? AND ts>?").bind(tgId, Date.now() - PENDING_MS).first();
-  return p ? activeCode(db, p.code) : null;
+  if (!p) return null;
+  const row = await activeCode(db, p.code, tgId);
+  return codeApplies(row, plan) ? row : null;
 }
 
 async function choosePlan(env, db, chatId, tgId, key) {
@@ -1574,7 +1733,7 @@ async function choosePlan(env, db, chatId, tgId, key) {
   if (!plan) return reply("این پلن دیگه وجود نداره. دوباره /plans رو بفرست.");
   await db.prepare("INSERT INTO pending_buy(tg_id,plan,code,ts) VALUES(?,?,NULL,?) ON CONFLICT(tg_id) DO UPDATE SET plan=excluded.plan, ts=excluded.ts, topup=0, use_wallet=0")
     .bind(tgId, key, Date.now()).run();
-  const row = await pendingCode(db, tgId);
+  const row = await pendingCode(db, tgId, plan);
   const price = priceAfter(plan, row);
   await reply(`✅ پلن «${plan.name}» (${fa(plan.days)} روز) انتخاب شد.\n💰 مبلغ: ${fa(price)} تومان${row ? ` (با کد ${row.code})` : ""}\n\n${formatPaymentText(st.pay_text)}\n\nمبلغ بالا به تومان است؛ دکمه کپی، مبلغ را به ریال کپی می‌کند.\nبعد از پرداخت، عکس رسید رو همین‌جا بفرست.`, { reply_markup: { inline_keyboard: paymentCopyButtons(st.pay_text, price) } });
   return walletOffer(env, db, chatId, tgId, plan, row);
@@ -1584,8 +1743,8 @@ async function applyCode(env, db, chatId, tgId, raw) {
   const reply = (t) => tg(env, "sendMessage", { chat_id: chatId, text: t }).catch(() => {});
   const code = String(raw).toUpperCase().replace(/[^A-Z0-9_-]/g, "").slice(0, 32);
   if (!code) return reply("کد تخفیف رو بعد از /code بنویس. مثلاً: /code ABC123");
-  const row = await activeCode(db, code);
-  if (!row) return reply("❌ این کد معتبر نیست یا منقضی شده.");
+  const row = await activeCode(db, code, tgId);
+  if (!row) return reply("❌ این کد معتبر نیست، منقضی شده یا مخصوص حساب دیگری است.");
   await db.prepare("INSERT INTO pending_buy(tg_id,plan,code,ts) VALUES(?,NULL,?,?) ON CONFLICT(tg_id) DO UPDATE SET code=excluded.code, ts=excluded.ts, topup=0")
     .bind(tgId, code, Date.now()).run();
   return reply(`🎟 کد «${code}» ثبت شد: ${fa(row.percent)}٪ تخفیف.\nحالا پلن رو از /plans انتخاب کن و رسید رو بفرست.`);
@@ -1609,7 +1768,7 @@ async function handleReceipt(env, db, msg) {
   // گرفتن اتمیک پیش‌نویس مانع تأیید هم‌زمان رسید و پرداخت کیف پول می‌شود.
   const claimed = await db.prepare("DELETE FROM pending_buy WHERE tg_id=? AND ts=? AND plan IS ? AND topup IS ?").bind(tgId, pend.ts, pend.plan, pend.topup).run();
   if (!claimed.meta.changes) return reply("⚠️ این سفارش تغییر کرده یا قبلاً پرداخت شده است؛ دوباره انتخاب کنید.");
-  const codeRow = isTopup ? null : await activeCode(db, pend.code);
+  const codeRow = isTopup ? null : await activeCode(db, pend.code, tgId);
   const amount = isTopup ? Number(pend.topup) : plan ? priceAfter(plan, codeRow) : null;
   const walletUsed = 0; // پرداخت ترکیبی برای سفارش‌های جدید پشتیبانی نمی‌شود.
   const photo = msg.photo[msg.photo.length - 1];
@@ -1674,7 +1833,7 @@ async function adminDecide(env, db, cq, action, id, planKey, answer) {
   const plan = st.plans.find((p) => p.key === planKey);
   if (!plan) return answer("پلن نامعتبره.");
   // مبلغ ثبت‌شده‌ی رسید فقط وقتی معتبره که همون پلنی باشه که ادمین تأیید می‌کنه؛ وگرنه قیمت پلن تأییدشده (با کد) حساب می‌شه
-  const gross = rec.amount !== null && rec.plan === plan.key ? rec.amount : priceAfter(plan, await activeCode(db, rec.code));
+  const gross = rec.amount !== null && rec.plan === plan.key ? rec.amount : priceAfter(plan, await activeCode(db, rec.code, rec.tg_id));
   // اعتبار کیف پول: فقط موقع تأیید کم می‌شه (رد شدن رسید اعتبار رو دست‌نخورده نگه می‌داره)
   const applied = Math.min(rec.wallet_used || 0, gross, await walletBalance(db, rec.tg_id));
   const amount = gross - applied;
@@ -1683,12 +1842,16 @@ async function adminDecide(env, db, cq, action, id, planKey, answer) {
   if (!res.meta.changes) return answer("قبلاً بررسی شده.");
   if (applied > 0) await walletDebit(db, rec.tg_id, applied, `رسید #${id}`);
   await audit(db, "tg:" + by, "receipt_approve", String(rec.tg_id), `${plan.key} ${amount}${applied ? " • اعتبار " + applied : ""}`);
-  if (rec.code) await db.prepare("UPDATE discount_codes SET used=used+1 WHERE code=? AND (max_uses=0 OR used<max_uses)").bind(rec.code).run();
+  if (rec.code) {
+    await db.prepare("UPDATE discount_codes SET used=used+1 WHERE code=? AND (max_uses=0 OR used<max_uses)").bind(rec.code).run();
+    await db.prepare("UPDATE personal_codes SET used=used+1 WHERE code=? AND tg_id=? AND (max_uses=0 OR used<max_uses)").bind(rec.code, String(rec.tg_id)).run();
+  }
   const until = await grantSub(db, rec.tg_id, plan.days);
+  const pts = await pointsAward(db, rec.tg_id, amount, `خرید اشتراک #${id}`);
   const when = new Date(until).toLocaleDateString("fa-IR", { timeZone: "Asia/Tehran" });
   await tg(env, "sendMessage", {
     chat_id: rec.tg_id,
-    text: fill(st.msg_approved, { plan: plan.name, days: fa(plan.days), date: when }),
+    text: fill(st.msg_approved, { plan: plan.name, days: fa(plan.days), date: when }) + (pts ? `\n⭐ ${fa(pts)} امتیاز به باشگاه امتیاز اضافه شد.` : ""),
   }).catch(() => {});
   await sendPush(env, db, rec.tg_id, { title: "✅ پرداخت تأیید شد", body: `پلن ${plan.name}: ${fa(plan.days)} روز اشتراک`, url: "/" }).catch(() => {});
   await stampReceipt(env, cq, `✅ تأیید شد: ${plan.name} (${fa(plan.days)} روز)`);
@@ -1723,6 +1886,11 @@ const DEFAULTS = {
   status_note: "",
   msg_welcome: "",
   msg_reminder: "⏰ اشتراکت {days} روز دیگه تموم می‌شه (تا {date}).\nبرای تمدید، /plans رو بفرست.",
+  points_enabled: "0",
+  points_rate: "0",
+  points_value: "1",
+  points_invite: "0",
+  points_min: "100",
   msg_approved: "⭐ پرداختت تأیید شد!\nپلن {plan}: {days} روز اشتراک.\nاعتبار تا {date}\n\nحالا برگرد به پنل و کانفیگ بساز.",
 };
 const STATUS_LEVELS = new Set(["ok", "degraded", "down"]);
@@ -1769,6 +1937,11 @@ async function getSettings(db) {
     msg_welcome: String(o.msg_welcome || "").slice(0, 1000),
     msg_reminder: String(o.msg_reminder || DEFAULTS.msg_reminder),
     msg_approved: String(o.msg_approved || DEFAULTS.msg_approved),
+    points_enabled: o.points_enabled === "1",
+    points_rate: Math.min(1000, Math.max(0, parseInt(o.points_rate) || 0)),
+    points_value: Math.min(1000, Math.max(1, parseInt(o.points_value) || 1)),
+    points_invite: Math.min(100000, Math.max(0, parseInt(o.points_invite) || 0)),
+    points_min: Math.min(1000000, Math.max(0, parseInt(o.points_min) || 0)),
     plans,
     plans_text: plansToText(plans),
   };
@@ -2097,7 +2270,8 @@ async function adminCodes(request, env) {
   const db = await getDB(env);
   if (request.method === "GET") {
     const r = await db.prepare("SELECT code,percent,max_uses,used,expires,active,created FROM discount_codes ORDER BY created DESC LIMIT 200").all();
-    return json({ codes: r.results || [] });
+    const p = await db.prepare("SELECT code,tg_id,percent,max_uses,used,expires,min_amount,active,created FROM personal_codes ORDER BY created DESC LIMIT 200").all();
+    return json({ codes: r.results || [], personal: p.results || [] });
   }
   let b;
   try { b = await request.json(); } catch { return json({ error: "bad" }, 400); }
@@ -2106,12 +2280,25 @@ async function adminCodes(request, env) {
   if (b.disable !== undefined) {
     await audit(db, "admin", b.disable ? "code_disable" : "code_enable", code, "");
     await db.prepare("UPDATE discount_codes SET active=? WHERE code=?").bind(b.disable ? 0 : 1, code).run();
+    await db.prepare("UPDATE personal_codes SET active=? WHERE code=?").bind(b.disable ? 0 : 1, code).run();
     return json({ ok: true });
   }
   const pct = parseInt(b.percent), max = parseInt(b.max_uses) || 0, days = parseInt(b.days) || 0;
   if (!(pct >= 1 && pct <= 100)) return json({ error: "درصد تخفیف باید بین ۱ تا ۱۰۰ باشه" }, 400);
   if (!(max >= 0 && max <= 100000) || !(days >= 0 && days <= 3650)) return json({ error: "مقادیر نامعتبره" }, 400);
   const exp = days ? Date.now() + days * 86400000 : null;
+  const owner = String(b.tg_id || "").replace(/[^0-9]/g, "");
+  if (b.tg_id !== undefined && b.tg_id !== "" && !/^[0-9]{3,20}$/.test(owner)) return json({ error: "شناسه کاربر نامعتبره" }, 400);
+  const minAmount = parseInt(b.min_amount) || 0;
+  if (!(minAmount >= 0 && minAmount <= 100000000)) return json({ error: "حداقل مبلغ خرید نامعتبره" }, 400);
+  if (owner) {
+    try {
+      await db.prepare("INSERT INTO personal_codes(code,tg_id,percent,max_uses,used,expires,min_amount,active,created) VALUES(?,?,?,?,0,?,?,1,?)")
+        .bind(code, owner, pct, max, exp, minAmount, Date.now()).run();
+      await audit(db, "admin", "personal_code_create", owner, `${code} • ${pct}% • سقف ${max || "∞"}`);
+    } catch { return json({ error: "این کد قبلاً ساخته شده" }, 409); }
+    return json({ ok: true, code, tg_id: owner });
+  }
   try {
     await db.prepare("INSERT INTO discount_codes(code,percent,max_uses,used,expires,active,created) VALUES(?,?,?,0,?,1,?)")
       .bind(code, pct, max, exp, Date.now()).run();
@@ -2256,6 +2443,13 @@ async function adminSettings(request, env) {
   const stNote = String(b.status_note || "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim().slice(0, 200);
   const refCredit = b.ref_credit === undefined ? 0 : parseInt(b.ref_credit);
   if (!(refCredit >= 0 && refCredit <= 10000000)) return json({ error: "اعتبار دعوت باید بین ۰ تا ۱۰٬۰۰۰٬۰۰۰ تومان باشه" }, 400);
+  const num = (v, min, max, fallback) => { const n = parseInt(v); return n >= min && n <= max ? n : fallback; };
+  const pRate = b.points_rate === undefined ? 0 : parseInt(b.points_rate);
+  const pValue = b.points_value === undefined ? 1 : parseInt(b.points_value);
+  const pInvite = b.points_invite === undefined ? 0 : parseInt(b.points_invite);
+  const pMin = b.points_min === undefined ? 100 : parseInt(b.points_min);
+  if (!(pRate >= 0 && pRate <= 1000) || !(pValue >= 1 && pValue <= 1000) || !(pInvite >= 0 && pInvite <= 100000) || !(pMin >= 0 && pMin <= 1000000))
+    return json({ error: "تنظیمات باشگاه امتیاز نامعتبر است" }, 400);
   const clr = (v, n) => String(v || "").replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/g, "").trim().slice(0, n);
   const msgWelcome = clr(b.msg_welcome, 1000);
   const msgReminder = clr(b.msg_reminder, 1000) || DEFAULTS.msg_reminder;
@@ -2279,6 +2473,11 @@ async function adminSettings(request, env) {
     up("admin_notify", b.admin_notify ? "1" : "0"),
     up("status_level", stLevel),
     up("status_note", stNote),
+    up("points_enabled", b.points_enabled ? "1" : "0"),
+    up("points_rate", String(pRate)),
+    up("points_value", String(pValue)),
+    up("points_invite", String(pInvite)),
+    up("points_min", String(pMin)),
   ]);
   return json({ ok: true });
 }
@@ -2968,7 +3167,7 @@ async function adminAudit(env, url) {
 }
 
 // پشتیبان: کلید، سشن و توکن‌ها عمداً نیستن
-const BACKUP_TABLES = ["settings", "discount_codes", "subs", "bans", "user_limits", "receipts", "refs", "tickets", "ticket_msgs", "broadcasts", "users", "visitors", "reminders", "reminder_settings", "occasion_quota", "notification_preferences", "mini_notices", "game_profiles", "mini_config_presets", "wallet", "wallet_log", "incidents"];
+const BACKUP_TABLES = ["settings", "discount_codes", "subs", "bans", "user_limits", "receipts", "refs", "tickets", "ticket_msgs", "broadcasts", "users", "visitors", "reminders", "reminder_settings", "occasion_quota", "points", "points_log", "points_redeems", "personal_codes", "gifts", "notification_preferences", "mini_notices", "game_profiles", "mini_config_presets", "wallet", "wallet_log", "incidents"];
 async function adminBackup(env) {
   const db = await getDB(env);
   const out = { exported: new Date().toISOString(), version: 1, tables: {} };
@@ -3129,13 +3328,15 @@ async function payWallet(env, db, chatId, tgId, token) {
       AND (SELECT balance FROM wallet WHERE tg_id=q.tg_id)>=q.amount
       AND ((q.kind='server' AND EXISTS(SELECT 1 FROM server_drafts d WHERE d.tg_id=q.tg_id AND d.token=q.token AND d.stage='receipt' AND d.created>? AND d.amount=q.amount))
         OR (q.kind='sub' AND EXISTS(SELECT 1 FROM pending_buy p WHERE p.tg_id=q.tg_id AND p.plan=q.plan AND p.ts=q.pending_ts AND p.ts>? AND COALESCE(p.code,'')=COALESCE(q.code,''))
-          AND (q.code IS NULL OR EXISTS(SELECT 1 FROM discount_codes c WHERE c.code=q.code AND c.active=1 AND c.percent=q.percent AND (c.expires IS NULL OR c.expires=0 OR c.expires>?) AND (c.max_uses=0 OR c.used<c.max_uses)))))`)
-      .bind(now, token, tgId, now-PENDING_MS, now-SERVER_DRAFT_MS, now-PENDING_MS, now),
+          AND (q.code IS NULL OR EXISTS(SELECT 1 FROM discount_codes c WHERE c.code=q.code AND c.active=1 AND c.percent=q.percent AND (c.expires IS NULL OR c.expires=0 OR c.expires>?) AND (c.max_uses=0 OR c.used<c.max_uses))
+            OR EXISTS(SELECT 1 FROM personal_codes c WHERE c.code=q.code AND c.tg_id=q.tg_id AND c.active=1 AND c.percent=q.percent AND (c.expires IS NULL OR c.expires=0 OR c.expires>?) AND (c.max_uses=0 OR c.used<c.max_uses)))))`)
+      .bind(now, token, tgId, now-PENDING_MS, now-SERVER_DRAFT_MS, now-PENDING_MS, now, now),
     db.prepare(`UPDATE wallet SET balance=balance-? WHERE tg_id=? AND ${active}`).bind(q.amount, tgId, token),
     db.prepare(`INSERT INTO wallet_log(tg_id,ts,delta,reason) SELECT ?,?,?,? WHERE ${active}`).bind(tgId, now, -q.amount, `خرید ${q.kind} #${token}`, token),
     db.prepare(`INSERT INTO subs(tg_id,until) SELECT ?,? WHERE ${active} AND ?='sub'
       ON CONFLICT(tg_id) DO UPDATE SET until=MAX(subs.until,?)+?`).bind(tgId, now+(q.days || 0)*86400000, token, q.kind, now, (q.days || 0)*86400000),
     db.prepare(`UPDATE discount_codes SET used=used+1 WHERE code=? AND ${active} AND ?='sub'`).bind(q.code, token, q.kind),
+    db.prepare(`UPDATE personal_codes SET used=used+1 WHERE code=? AND tg_id=? AND ${active} AND ?='sub'`).bind(q.code, tgId, token, q.kind),
     db.prepare(`INSERT INTO server_orders(tg_id,product,volume,days,users,amount,file_id,status,created,payment_token)
       SELECT d.tg_id,d.product,d.volume,d.days,d.users,d.amount,'','approved',?,? FROM server_drafts d WHERE d.tg_id=? AND d.token=? AND d.stage='receipt' AND ${active}`)
       .bind(now, token, tgId, token, token),
@@ -3144,7 +3345,10 @@ async function payWallet(env, db, chatId, tgId, token) {
     db.prepare("UPDATE wallet_payments SET status='paid' WHERE token=? AND status='processing'").bind(token),
   ]);
   if (!results[1].meta.changes) return reply("⚠️ پرداخت انجام نشد: موجودی کافی نیست یا صورت‌حساب/کد تخفیف منقضی یا قبلاً پرداخت شده است. دوباره خرید را شروع کنید.");
-  if (q.kind === "sub") return reply(`✅ اشتراک شما با کیف پول پرداخت و فعال شد. مبلغ: ${fa(q.amount)} تومان.`);
+  if (q.kind === "sub") {
+    const pts = await pointsAward(db, tgId, q.amount, `خرید اشتراک با کیف پول`);
+    return reply(`✅ اشتراک شما با کیف پول پرداخت و فعال شد. مبلغ: ${fa(q.amount)} تومان.${pts ? `\n⭐ ${fa(pts)} امتیاز به باشگاه امتیاز اضافه شد.` : ""}`);
+  }
   const order = await db.prepare("SELECT * FROM server_orders WHERE payment_token=?").bind(token).first();
   if (order) {
     const sent = await sendWalletOrderToAdmin(env, db, order);
