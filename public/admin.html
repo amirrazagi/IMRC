@@ -260,6 +260,7 @@ details summary{cursor:pointer;font-weight:700;padding:.6rem 0}
     </div>
   </div>
   <div class="card" id="users"></div>
+  <div class="card frm" style="margin-top:12px"><h3>✉️ پیام اختصاصی در ربات</h3><p>شناسه عددی را وارد کنید یا از فهرست کاربران انتخاب کنید.</p><input id="directUser" inputmode="numeric" placeholder="شناسه عددی تلگرام"/><textarea id="directText" maxlength="3500" placeholder="متن پیام اختصاصی" rows="4" style="margin-top:8px"></textarea><div class="btns"><button onclick="sendDirect()">ارسال پیام</button></div></div>
 
   </div>
 <div class="blk"><h3 class="blk-h">👥 عملیات گروهی (روی نتیجه‌ی فیلتر و جستجوی بالا)</h3>
@@ -678,10 +679,12 @@ function drawUsers(list,now){
       <div class="sub">${esc(handle)}${esc(v.country||"?")}${v.city?" • "+esc(v.city):""} • ${esc(v.device)}${v.last_name?" • "+esc(v.last_name):""}</div>
       ${v.ul_lim!=null&&(!v.ul_until||v.ul_until>now)?`<span class="badge" style="background:var(--accent-soft);color:var(--accent)">⚙️ ${v.ul_lim} در ${PER[v.ul_period]||""}${v.ul_unlock?" • همه‌امکانات":""}</span>`:""}
       ${v.banned?`<span class="badge" style="background:color-mix(in srgb,var(--danger) 16%,transparent);color:var(--danger)">🚫 مسدود</span>`:""}
-      ${v.tg_id?`<div class="btns"><button class="ok" onclick="grant('${esc(v.tg_id)}')">⭐ اشتراک</button><button onclick="openLimit(${i})">⚙️ سقف</button>${v.banned?`<button onclick="ban('${esc(v.tg_id)}',false)">✅ رفع مسدودی</button>`:`<button onclick="ban('${esc(v.tg_id)}',true)">🚫 مسدود</button>`}${v.sub_until&&v.sub_until>now?`<button onclick="revoke('${esc(v.tg_id)}')">لغو</button>`:""}</div>`:""}</div>
+      ${v.tg_id?`<div class="btns"><button class="ok" onclick="grant('${esc(v.tg_id)}')">⭐ اشتراک</button><button onclick="selectDirect('${esc(v.tg_id)}')">✉️ پیام</button><button onclick="openLimit(${i})">⚙️ سقف</button>${v.banned?`<button onclick="ban('${esc(v.tg_id)}',false)">✅ رفع مسدودی</button>`:`<button onclick="ban('${esc(v.tg_id)}',true)">🚫 مسدود</button>`}${v.sub_until&&v.sub_until>now?`<button onclick="revoke('${esc(v.tg_id)}')">لغو</button>`:""}</div>`:""}</div>
       <div style="text-align:left"><span class="num">${fa(v.configs)} کانفیگ</span>
       <div class="sub" style="direction:rtl;text-align:left">${fa(v.actions)} فعالیت • ${on?"آنلاین":ago(v.last_seen,now)}</div></div></div>`}).join("")||'<span style="color:var(--muted)">هنوز کاربری نیست</span>';
 }
+function selectDirect(id){$("directUser").value=id;$("directText").focus();$("directText").scrollIntoView({behavior:"smooth",block:"center"})}
+async function sendDirect(){const id=$("directUser").value.trim(),text=$("directText").value.trim();if(!/^\d{3,20}$/.test(id)||!text)return alert("شناسه عددی و متن پیام لازم است.");if(!confirm("پیام به کاربر "+id+" ارسال شود؟"))return;try{await post("/api/admin/direct-message",{tg_id:id,text});$("directText").value="";alert("✅ پیام ارسال شد.")}catch(e){alert("❌ "+e.message)}}
 let uPage=0,uTimer;
 async function loadUsers(){
   const q=encodeURIComponent($("uq").value.trim()),f=encodeURIComponent($("uf").value);
