@@ -127,6 +127,7 @@ function getDB(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS location_status(code TEXT PRIMARY KEY, level TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', updated INTEGER NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS mini_config_presets(tg_id TEXT PRIMARY KEY, config TEXT NOT NULL, updated INTEGER NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS game_profiles(tg_id TEXT NOT NULL, name TEXT NOT NULL, config TEXT NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY(tg_id,name))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS occasion_quota(id INTEGER PRIMARY KEY CHECK(id=1), bonus INTEGER NOT NULL, starts INTEGER NOT NULL, ends INTEGER NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS reminder_settings(tg_id TEXT PRIMARY KEY, days INTEGER NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS notification_preferences(tg_id TEXT PRIMARY KEY, ticket INTEGER NOT NULL DEFAULT 1, orders INTEGER NOT NULL DEFAULT 1)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS mini_notices(id INTEGER PRIMARY KEY AUTOINCREMENT,tg_id TEXT NOT NULL,ts INTEGER NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL)"),
@@ -273,7 +274,7 @@ async function miniApi(request, env) {
   if (body.action === "summary") {
     const q = await quotaInfo(db, id);
     return json({ name: String(user.first_name || "کاربر").slice(0, 80), username: String(user.username || "").slice(0, 32),
-      balance: await walletBalance(db, id), sub: q.sub, sub_until: q.sub_until, remaining: q.remaining, limit: q.limit, period: q.period }, 200, { "Cache-Control": "no-store" });
+      balance: await walletBalance(db, id), sub: q.sub, sub_until: q.sub_until, remaining: q.remaining, limit: q.limit, bonus: q.bonus || 0, period: q.period }, 200, { "Cache-Control": "no-store" });
   }
   if (body.action === "locations") {
     const rows = (await db.prepare("SELECT code,level,note,updated FROM location_status ORDER BY code").all()).results || [];
@@ -1811,12 +1812,15 @@ async function quotaInfo(db, tgId) {
   const ul = await db.prepare("SELECT lim,period,unlock,until FROM user_limits WHERE tg_id=?").bind(id).first();
   const custom = !!(ul && (!ul.until || ul.until > now));
   const period = custom && PERIODS[ul.period] ? ul.period : "day";
-  const limit = custom ? ul.lim : (subActive ? st.sub_limit : st.free_limit);
+  const baseLimit = custom ? ul.lim : (subActive ? st.sub_limit : st.free_limit);
+  const occasion = await db.prepare("SELECT bonus,starts,ends FROM occasion_quota WHERE id=1").first();
+  const bonus = occasion && occasion.starts <= now && now < occasion.ends ? occasion.bonus : 0;
+  const limit = baseLimit + bonus;
   const periodStart = periodStartOf(now, period);
   const used = (await db.prepare("SELECT COUNT(*) n FROM config_log WHERE tg_id=? AND ts>=?").bind(id, periodStart).first()).n;
   const unlock = subActive || (custom && !!ul.unlock);
   return {
-    used, limit, remaining: Math.max(0, limit - used), period, periodStart,
+    used, limit, baseLimit, bonus, remaining: Math.max(0, limit - used), period, periodStart,
     custom, unlock, sub: subActive, sub_until: subActive ? sub.until : null,
     buy_text: st.buy_text, free_countries: st.free_countries,
   };
@@ -1916,8 +1920,9 @@ async function issueConfig(env, sess, b, meta) {
   // ثبت اتمیک: فقط اگر هنوز سهمیه مونده باشه
   const ins = await db.prepare(
     `INSERT INTO config_log(tg_id,ts,region)
-     SELECT ?,?,? WHERE (SELECT COUNT(*) FROM config_log WHERE tg_id=? AND ts>=?) < ?`
-  ).bind(String(sess.tg_id), now, region, String(sess.tg_id), q.periodStart, q.limit).run();
+     SELECT ?,?,? WHERE (SELECT COUNT(*) FROM config_log WHERE tg_id=? AND ts>=?) < ? +
+       COALESCE((SELECT bonus FROM occasion_quota WHERE id=1 AND starts<=? AND ends>?),0)`
+  ).bind(String(sess.tg_id), now, region, String(sess.tg_id), q.periodStart, q.baseLimit, now, now).run();
   const ok = ins && ins.meta ? ins.meta.changes > 0 : false;
   if (!ok) {
     await capAlert(env, db, sess, q).catch(() => {});
@@ -2214,6 +2219,22 @@ async function adminBan(request, env) {
     if (env.BOT_TOKEN) await tg(env, "sendMessage", { chat_id: tgId, text: "✅ مسدودیتت برداشته شد. می‌تونی دوباره وارد پنل بشی." }).catch(() => {});
   }
   return json({ ok: true });
+}
+
+async function adminOccasionQuota(request, env) {
+  const db = await getDB(env);
+  if (request.method === "GET") {
+    const row = await db.prepare("SELECT bonus,starts,ends FROM occasion_quota WHERE id=1").first();
+    return json(row || { bonus: 0, starts: 0, ends: 0 }, 200, { "Cache-Control": "no-store" });
+  }
+  let b; try { b = await request.json(); } catch { return json({ error: "invalid" }, 400); }
+  if (!Number.isInteger(b.bonus) || b.bonus < 0 || b.bonus > 1000 || !Number.isSafeInteger(b.starts) || !Number.isSafeInteger(b.ends) ||
+      (b.bonus > 0 && (b.starts < 1 || b.ends <= b.starts || b.ends - b.starts > 366 * 86400000)))
+    return json({ error: "سهمیه یا بازه زمانی نامعتبر است (حداکثر ۳۶۶ روز)" }, 400);
+  if (!b.bonus) { b.starts = 0; b.ends = 0; }
+  await db.prepare("INSERT INTO occasion_quota(id,bonus,starts,ends) VALUES(1,?,?,?) ON CONFLICT(id) DO UPDATE SET bonus=excluded.bonus,starts=excluded.starts,ends=excluded.ends").bind(b.bonus,b.starts,b.ends).run();
+  await audit(db, "admin", "occasion_quota", "", `${b.bonus} ${b.starts} ${b.ends}`);
+  return json({ ok: true }, 200, { "Cache-Control": "no-store" });
 }
 
 async function adminSettings(request, env) {
@@ -2947,7 +2968,7 @@ async function adminAudit(env, url) {
 }
 
 // پشتیبان: کلید، سشن و توکن‌ها عمداً نیستن
-const BACKUP_TABLES = ["settings", "discount_codes", "subs", "bans", "user_limits", "receipts", "refs", "tickets", "ticket_msgs", "broadcasts", "users", "visitors", "reminders", "reminder_settings", "notification_preferences", "mini_notices", "game_profiles", "mini_config_presets", "wallet", "wallet_log", "incidents"];
+const BACKUP_TABLES = ["settings", "discount_codes", "subs", "bans", "user_limits", "receipts", "refs", "tickets", "ticket_msgs", "broadcasts", "users", "visitors", "reminders", "reminder_settings", "occasion_quota", "notification_preferences", "mini_notices", "game_profiles", "mini_config_presets", "wallet", "wallet_log", "incidents"];
 async function adminBackup(env) {
   const db = await getDB(env);
   const out = { exported: new Date().toISOString(), version: 1, tables: {} };
@@ -3457,6 +3478,7 @@ export default {
         const bad = await adminAuth(request, env); if (bad) return bad;
         return await adminSub(request, env);
       }
+      if (p === "/api/admin/occasion-quota" && (request.method === "GET" || request.method === "POST")) { const bad = await adminAuth(request, env); if (bad) return bad; return await adminOccasionQuota(request, env); }
       if (p === "/api/admin/settings" && request.method === "POST") {
         const bad = await adminAuth(request, env); if (bad) return bad;
         return await adminSettings(request, env);
