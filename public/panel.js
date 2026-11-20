@@ -47,6 +47,7 @@
   const ROLE_FA = { attacker: "Attacker (تهاجمی)", defender: "Defender (دفاعی)", support: "Support (پشتیبانی)" };
   const ROLE_SHORT = { attacker: "Attacker", defender: "Defender", support: "Support" };
   const THEMES = [
+    ["crimson", "قرمز نئون", "#06060a", "#ff2b45", "#ff9aa8"],
     ["light", "روشن", "#f3f5f9", "#ffffff", "#2347f0"],
     ["dark", "تیره", "#0a0e16", "#111827", "#6d8cff"],
     ["gold", "طلایی", "#0b0904", "#16120a", "#ffc53d"],
@@ -246,13 +247,13 @@
 
   /* ============================== themes / prefs ============================== */
   function applyTheme(name) {
-    const id = THEME_IDS.includes(name) ? name : (matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light");
+    const id = THEME_IDS.includes(name) ? name : "crimson";
     document.documentElement.dataset.theme = id;
     $$(".theme-btn").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.themeSet === id)));
     return id;
   }
   function cycleTheme() {
-    const cur = document.documentElement.dataset.theme || "light";
+    const cur = document.documentElement.dataset.theme || "crimson";
     const next = THEME_IDS[(THEME_IDS.indexOf(cur) + 1) % THEME_IDS.length];
     store.set("IMRC_theme", next);
     applyTheme(next);

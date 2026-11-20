@@ -523,7 +523,7 @@ const BUTTON_CMDS = {
 // فقط شروع در فهرست کنار کادر پیام؛ دستورهای قبلی همچنان قابل تایپ هستند.
 const USER_COMMANDS = [{ command: "start", description: "شروع مجدد و نمایش منو" }];
 const SUPPORT_HELP = "🎫 پیامت رو همین‌جا بنویس تا برای پشتیبانی فرستاده بشه. جوابت رو همین‌جا می‌گیری.";
-const WELCOME = "سلام 👋 به IMRC خوش اومدی!\n\n⚡ ساخت کانفیگ رایگان\n💳 خرید اشتراک برای استفاده VIP از پنل\n🖥 خرید سرور\n💼 کیف پول و شارژ\n🎁 دعوت دوستان و پشتیبانی";
+const WELCOME = "🖤 IMRC — GAMING · DNS · VPN\n\nسلام 👋 به پنل IMRC خوش اومدی!\n\n⚡ ساخت کانفیگ رایگان\n💳 خرید اشتراک VIP\n🖥 خرید سرور حجمی و نامحدود\n💼 کیف پول، شارژ و امتیاز\n🎁 خرید هدیه برای دوستان\n🎫 پشتیبانی و تیکت\n\nاز دکمه‌های زیر شروع کن 👇";
 
 async function tgWebhook(request, env) {
   if (!env.TG_WEBHOOK_SECRET || !safeEq(request.headers.get("X-Telegram-Bot-Api-Secret-Token"), env.TG_WEBHOOK_SECRET))
@@ -586,7 +586,7 @@ async function sendMainMenu(env, db, chatId, isAdminUser, text) {
   ];
   if (isAdminUser) keyboard.push([{ text: "🛠 پنل مدیریت", callback_data: "menu:admin" }, { text: "🎫 تیکت‌های باز", callback_data: "menu:tickets" }]);
   // تلگرام اجازه نمی‌دهد حذف کیبورد و دکمه‌های inline در یک پیام باشند.
-  await tg(env, "sendMessage", { chat_id: chatId, text: "👇 منوی ربات", reply_markup: HIDE_KB }).catch(() => {});
+  await tg(env, "sendMessage", { chat_id: chatId, text: "🖤 IMRC · یکی از گزینه‌ها رو انتخاب کن 👇", reply_markup: HIDE_KB }).catch(() => {});
   return tg(env, "sendMessage", { chat_id: chatId, text: text || WELCOME, reply_markup: { inline_keyboard: keyboard } }).catch(() => {});
 }
 
@@ -601,8 +601,8 @@ async function syncBotCommands(env) {
 }
 
 // پروفایل ربات: توضیح کامل (قبل از /start نمایش داده می‌شه، ≤۵۱۲ کاراکتر) و توضیح کوتاه (در پروفایل، ≤۱۲۰ کاراکتر)
-const BOT_DESCRIPTION = "⚡ ساخت کانفیگ رایگان\n💳 خرید اشتراک برای استفاده VIP از پنل\n🖥 خرید سرور\n💼 کیف پول و شارژ\n🎁 دعوت دوستان و پشتیبانی\n\nبرای شروع /start رو بزن 👇";
-const BOT_SHORT_DESCRIPTION = "⚡ کانفیگ رایگان، اشتراک VIP، خرید سرور و کیف پول در IMRC";
+const BOT_DESCRIPTION = "🖤 IMRC — GAMING · DNS · VPN\n\n⚡ ساخت کانفیگ رایگان\n💳 خرید اشتراک VIP\n🖥 خرید سرور حجمی و نامحدود\n💼 کیف پول، امتیاز و هدیه\n🎫 پشتیبانی آنلاین\n\nبرای شروع /start رو بزن 👇";
+const BOT_SHORT_DESCRIPTION = "🖤 IMRC · کانفیگ رایگان، اشتراک VIP، سرور و کیف پول";
 async function syncBotProfile(env) {
   const a = await tg(env, "setMyDescription", { description: BOT_DESCRIPTION }).catch(() => ({ ok: false }));
   const b = await tg(env, "setMyShortDescription", { short_description: BOT_SHORT_DESCRIPTION }).catch(() => ({ ok: false }));
