@@ -22,14 +22,16 @@
   function empty(container, text) { container.replaceChildren(element('div', text, 'empty-state')); }
   function showScreen(id) {
     document.querySelectorAll('.screen').forEach(screen => { const active = screen.id === id; screen.hidden = !active; screen.classList.toggle('active', active); });
-    document.querySelectorAll('.nav-item').forEach(item => { const active = item.dataset.tab === id || (['orders','history','locations','troubleshoot'].includes(id) && item.dataset.tab === 'account') || (['support','generator'].includes(id) && item.dataset.tab === 'home'); item.classList.toggle('active', active); if (active) item.setAttribute('aria-current','page'); else item.removeAttribute('aria-current'); });
+    document.querySelectorAll('.nav-item').forEach(item => { const active = item.dataset.tab === id || (['orders','history','locations','troubleshoot','compare','notices','reminder'].includes(id) && item.dataset.tab === 'account') || (['support','generator'].includes(id) && item.dataset.tab === 'home'); item.classList.toggle('active', active); if (active) item.setAttribute('aria-current','page'); else item.removeAttribute('aria-current'); });
     window.scrollTo({ top: 0, behavior: 'smooth' });
     if (authenticated) {
+      if (id === 'notices') loadNotices();
+      if (id === 'reminder') loadReminder();
       if (id === 'locations') loadLocations();
       if (id === 'orders') loadOrders();
       if (id === 'history') loadHistory();
       if (id === 'support') loadTickets();
-      if (id === 'generator') loadOptions();
+      if (id === 'generator') { loadOptions(); loadProfiles(); }
     }
   }
   document.querySelectorAll('.nav-item').forEach(button => button.addEventListener('click', () => showScreen(button.dataset.tab)));
@@ -49,6 +51,9 @@
       data.locations.forEach(loc => { const card = element('article', null, 'detail-card'); card.append(element('h2', loc.name), element('span', labels[loc.level] || 'نامشخص', 'status-pill')); if (loc.note) card.append(element('p', loc.note)); card.append(element('p', 'ثبت دستی: ' + date(loc.updated))); box.append(card); });
     } catch (error) { empty(box, errorMessage(error)); }
   }
+  async function loadNotices() { const box=$('notices-content'); empty(box,'در حال دریافت اعلان‌ها...'); try { const data=await request('notifications'); box.replaceChildren(); if (!data.notices.length) return empty(box,'هنوز اعلان جدیدی ثبت نشده است.'); data.notices.forEach(n => { const card=element('article',null,'detail-card'); card.append(element('p',n.text),element('p',date(n.ts))); box.append(card); }); } catch(e) { empty(box,errorMessage(e)); } }
+  async function loadReminder() { try { const data=await request('reminder_get'); $('reminder-days').value=data.days; } catch(e) { notify(errorMessage(e)); } }
+  $('reminder-form').addEventListener('submit', async e => { e.preventDefault(); if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); const days=Number($('reminder-days').value); try { await request('reminder_save',{days}); notify(days ? `یادآوری ${number(days)} روز پیش از انقضا تنظیم شد.` : 'یادآوری انقضا غیرفعال شد.'); } catch(err) { notify(errorMessage(err)); } });
   async function loadOrders() {
     const box = $('orders-content'); empty(box, 'در حال دریافت سفارش‌ها...');
     try {
@@ -60,6 +65,16 @@
         card.append(element('h2', `${order.product_name} · #${number(order.id)}`), element('span', statuses[order.status] || 'در حال بررسی', 'status-pill'));
         const detail = order.product === 'unlimited' ? `نامحدود · ${number(order.users)} کاربر` : `${number(order.volume)} گیگابایت`;
         card.append(element('p', `${detail} · ${number(order.days)} روز · ${number(order.amount)} تومان`), element('p', `تاریخ سفارش: ${date(order.created)}`));
+        const timeline = element('div', null, 'line'); timeline.append(element('p', `🕓 ثبت سفارش: ${date(order.created)}`));
+        if (order.decided) timeline.append(element('p', `${order.status === 'rejected' ? '❌ رسید رد شد' : '✅ پرداخت بررسی شد'}: ${date(order.decided)}`));
+        else if (order.payment_method === 'wallet') timeline.append(element('p', `✅ پرداخت با کیف پول: ${date(order.created)}`));
+        if (order.delivered_at) timeline.append(element('p', `📦 تحویل: ${date(order.delivered_at)}`));
+        else if (order.status === 'delivered') timeline.append(element('p', '📦 تحویل شده · تاریخ ثبت نشده'));
+        card.append(timeline);
+        const invoice = element('button', 'دانلود صورت‌حساب متنی ↓'); invoice.type='button'; invoice.addEventListener('click', () => {
+          const invoiceText = [`صورت‌حساب سفارش #${order.id}`, `سرویس: ${order.product_name}`, `جزئیات: ${detail}`, `مدت: ${order.days} روز`, `مبلغ: ${order.amount} تومان`, `روش پرداخت: ${order.payment_method === 'wallet' ? 'کیف پول' : 'رسید کارت‌به‌کارت (وضعیت تأیید در بخش وضعیت)' }`, `وضعیت: ${statuses[order.status] || 'در حال بررسی'}`, `تاریخ ثبت: ${date(order.created)}`, 'این صورت‌حساب صرفاً اطلاعات سفارش ثبت‌شده است.'].join('\n');
+          download(new Blob([invoiceText], {type:'text/plain;charset=utf-8'}), `imrc-order-${order.id}.txt`);
+        }); card.append(invoice);
         if (order.files.length) {
           const files = element('div', null, 'line'); files.append(element('p', 'فایل‌ها و پیام‌های تحویلی'));
           order.files.forEach(file => {
@@ -104,6 +119,12 @@
   $('preset-load').addEventListener('click', async () => { if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); try { const data = await request('config_preset_get'); if (!data.config) return notify('هنوز تنظیماتی ذخیره نشده است.'); const c = data.config; $('cfg-region').value = c.region; $('cfg-mode').value = c.mode; $('cfg-role').value = c.role; $('cfg-dns').value = c.dns; $('cfg-name').value = c.name || ''; const preset = [...$('cfg-mtu').options].some(o => o.value === c.mtu); $('cfg-mtu').value = preset ? c.mtu : ''; $('cfg-custom-mtu').value = preset ? '' : c.mtu; notify('تنظیمات بارگذاری شد. محدودیت اشتراک هنگام ساخت دوباره بررسی می‌شود.'); } catch(e) { notify(errorMessage(e)); } });
   const help = { connect: '۱. اینترنت معمولی خود را بررسی کن.\n۲. ساعت دستگاه را روی حالت خودکار بگذار.\n۳. فایل را دوباره وارد و شبکه دیگری را امتحان کن.\n۴. اگر حل نشد به پشتیبانی پیام بده.', slow: '۱. یک شبکه دیگر را امتحان کن.\n۲. برنامه‌های مصرف‌کننده اینترنت را ببند.\n۳. نتیجه ممکن است با زمان و شبکه تغییر کند؛ برای بررسی دقیق به پشتیبانی پیام بده.', file: '۱. مطمئن شو فایل با پسوند .conf ذخیره شده.\n۲. برنامه سازگار را به‌روز کن.\n۳. فایل را مستقیم وارد کن و از تغییر محتوای آن بپرهیز.', payment: '۱. وضعیت سفارش را در سرویس‌های من بررسی کن.\n۲. شماره سفارش و رسید را برای پشتیبانی بفرست.\n۳. اطلاعات محرمانه کارت را ارسال نکن.' };
   document.querySelectorAll('[data-help]').forEach(button => button.addEventListener('click', () => { $('help-answer').textContent = help[button.dataset.help] || ''; $('help-answer').style.whiteSpace = 'pre-line'; $('help-answer').hidden = false; }));
+  let gameProfiles = [];
+  async function loadProfiles() { try { const data = await request('game_profiles'); gameProfiles = data.profiles; options($('profile-select'), gameProfiles.map(p => ({ value: p.name, label: p.name }))); } catch(e) { notify(errorMessage(e)); } }
+  $('profile-save').addEventListener('click', async () => { if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); try { await request('game_profile_save', { name: $('profile-name-input').value, config: configFields() }); await loadProfiles(); notify('پروفایل بازی ذخیره شد؛ کلید خصوصی در آن نیست.'); } catch(e) { notify(errorMessage(e)); } });
+  $('profile-load').addEventListener('click', () => { const profile = gameProfiles.find(p => p.name === $('profile-select').value); if (!profile) return notify('پروفایلی انتخاب نشده است.'); const c=profile.config; $('cfg-region').value=c.region; $('cfg-mode').value=c.mode; $('cfg-role').value=c.role; $('cfg-dns').value=c.dns; $('cfg-name').value=c.name || ''; const predefined=[...$('cfg-mtu').options].some(o => o.value === c.mtu); $('cfg-mtu').value=predefined?c.mtu:''; $('cfg-custom-mtu').value=predefined?'':c.mtu; notify('پروفایل بارگذاری شد؛ محدودیت اشتراک هنگام ساخت بررسی می‌شود.'); });
+  $('profile-delete').addEventListener('click', async () => { const name=$('profile-select').value; if (!name || !confirm('این پروفایل حذف شود؟')) return; try { await request('game_profile_delete', { name }); await loadProfiles(); notify('پروفایل حذف شد.'); } catch(e) { notify(errorMessage(e)); } });
+  $('compare-form').addEventListener('submit', e => { e.preventDefault(); const before=Number($('before-ping').value), after=Number($('after-ping').value); if (!(before>=1 && before<=9999 && after>=1 && after<=9999)) return; const difference=before-after; $('compare-result').textContent = difference > 0 ? `پینگ واردشده بعد از اتصال ${number(difference)} میلی‌ثانیه کمتر است.` : difference < 0 ? `پینگ واردشده بعد از اتصال ${number(-difference)} میلی‌ثانیه بیشتر است.` : 'دو مقدار واردشده برابرند.'; $('compare-result').textContent += ' نتیجه به شبکه، زمان و مقصد تست وابسته است.'; $('compare-result').hidden=false; });
   $('config-form').addEventListener('submit', async e => { e.preventDefault(); if (!authenticated) return notify('مینی‌اپ را از تلگرام باز کن.'); const submit = e.submitter; submit.disabled = true;
     try { const data = await request('config_create', { config: configFields() }); configText = data.config; configName = (data.name || 'IMRC').replace(/[^a-zA-Z0-9_-]/g, '') + '.conf'; $('config-output').value = configText; $('config-result').hidden = false; $('config-result').scrollIntoView({ behavior: 'smooth' }); $('quota').textContent = number(data.remaining) + ' / ' + number(data.limit); }
     catch (error) { notify(errorMessage(error)); } finally { submit.disabled = false; }
