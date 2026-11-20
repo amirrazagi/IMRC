@@ -54,12 +54,12 @@ test('API uses only signed user, denies invalid or banned identities, and report
 test('mini app data stays scoped to signed user and file resend checks ownership', async () => {
   const { DatabaseSync } = require('node:sqlite');
   const sql = new DatabaseSync(':memory:');
-  sql.exec(`CREATE TABLE server_orders(id INTEGER PRIMARY KEY,tg_id TEXT,product TEXT,volume INTEGER,days INTEGER,users INTEGER,amount INTEGER,status TEXT,created INTEGER);
+  sql.exec(`CREATE TABLE server_orders(id INTEGER PRIMARY KEY,tg_id TEXT,product TEXT,volume INTEGER,days INTEGER,users INTEGER,amount INTEGER,status TEXT,created INTEGER,decided INTEGER,delivered_at INTEGER,payment_token TEXT);
     CREATE TABLE server_deliveries(order_id INTEGER,source_chat TEXT,source_message INTEGER,created INTEGER,kind TEXT,file_name TEXT,file_id TEXT);
     CREATE TABLE wallet_log(id INTEGER PRIMARY KEY,tg_id TEXT,ts INTEGER,delta INTEGER,reason TEXT);
     CREATE TABLE tickets(id INTEGER PRIMARY KEY,tg_id TEXT,status TEXT,category TEXT);
     CREATE TABLE ticket_msgs(id INTEGER PRIMARY KEY,ticket_id INTEGER,sender TEXT,text TEXT,ts INTEGER);`);
-  sql.exec("INSERT INTO server_orders VALUES(1,'123','multi',5,30,NULL,75000,'delivered',1),(2,'999','wire',5,30,NULL,100000,'delivered',1); INSERT INTO server_deliveries VALUES(1,'42',11,1,'document','a.conf','file-a'),(2,'42',22,1,'document','b.conf','file-b'); INSERT INTO wallet_log VALUES(1,'123',1,-75000,'server'),(2,'999',1,90000,'private'); INSERT INTO tickets VALUES(1,'123','open','general'),(2,'999','open','general'); INSERT INTO ticket_msgs VALUES(1,1,'admin','hello',1),(2,2,'admin','private',1);");
+  sql.exec("INSERT INTO server_orders VALUES(1,'123','multi',5,30,NULL,75000,'delivered',1,NULL,NULL,NULL),(2,'999','wire',5,30,NULL,100000,'delivered',1,NULL,NULL,NULL); INSERT INTO server_deliveries VALUES(1,'42',11,1,'document','a.conf','file-a'),(2,'42',22,1,'document','b.conf','file-b'); INSERT INTO wallet_log VALUES(1,'123',1,-75000,'server'),(2,'999',1,90000,'private'); INSERT INTO tickets VALUES(1,'123','open','general'),(2,'999','open','general'); INSERT INTO ticket_msgs VALUES(1,1,'admin','hello',1),(2,2,'admin','private',1);");
   const db = { prepare(q) { let args=[]; return { bind(...a) { args=a; return this; }, async first(){ return sql.prepare(q).get(...args) || null; }, async all(){ return { results: sql.prepare(q).all(...args) }; } }; } };
   const { context } = setup(); context.getDB = async () => db; context.SERVER_PRODUCTS = { multi: { name: 'multi' }, wire: { name: 'wire' } };
   const copied = []; context.tg = async (env, method, payload) => { copied.push(payload); return { ok: true }; };
@@ -130,4 +130,27 @@ test('manual location status is labeled via stored entries', async () => {
   context.getDB=async()=>({prepare:()=>({async all(){return {results:[{code:'tr',level:'down',note:'بررسی',updated:123}]};}})});
   const r=await context.miniApi(request({initData:signed({auth_date:now(),user:'{"id":123}'}),action:'locations'}),{BOT_TOKEN:'test:token'});
   assert.equal(r.status,200); const data=await r.json(); assert.equal(data.locations[0].name,'ترکیه'); assert.equal(data.locations[0].level,'down');
+});
+test('game profiles are isolated per user, limited to ten, and never store arbitrary private data', async () => {
+  const { DatabaseSync } = require('node:sqlite'); const sql = new DatabaseSync(':memory:');
+  sql.exec('CREATE TABLE game_profiles(tg_id TEXT,name TEXT,config TEXT,updated INTEGER,PRIMARY KEY(tg_id,name))');
+  const db = { prepare(q) { let args=[]; return { bind(...a){args=a;return this}, async all(){return {results:sql.prepare(q).all(...args)}}, async run(){const r=sql.prepare(q).run(...args);return {meta:{changes:Number(r.changes)}}} }; } };
+  const { context }=setup();context.getDB=async()=>db;context.BOT_COUNTRIES=[{code:'tr'}];context.BOT_MODES={ranked:'R'};context.BOT_ROLES={attacker:'A'};context.BOT_DNS=[{v:''}];
+  const one=signed({auth_date:now(),user:'{"id":123}'}),two=signed({auth_date:now(),user:'{"id":999}'}),env={BOT_TOKEN:'test:token'},config={region:'tr',mode:'ranked',role:'attacker',dns:'',mtu:'1280',name:'test',secret:'NO'};
+  for(let i=0;i<10;i++){const r=await context.miniApi(request({initData:one,action:'game_profile_save',name:'game'+i,config}),env);assert.equal(r.status,200)}
+  assert.equal((await context.miniApi(request({initData:one,action:'game_profile_save',name:'extra',config}),env)).status,400);
+  assert.equal((await (await context.miniApi(request({initData:two,action:'game_profiles'}),env)).json()).profiles.length,0);
+  assert(!sql.prepare('SELECT config FROM game_profiles LIMIT 1').get().config.includes('NO'));
+  await context.miniApi(request({initData:two,action:'game_profile_delete',name:'game0'}),env);
+  assert.equal(sql.prepare('SELECT COUNT(*) n FROM game_profiles').get().n,10);
+});
+test('reminder choices reject invalid days and are scoped to the signed user', async () => {
+  const { context }=setup(); const rows=new Map();
+  context.getSettings=async()=>({remind_days:3});
+  context.getDB=async()=>({prepare:()=>({bind(...args){this.args=args;return this},async first(){const value=rows.get(this.args[0]);return value===undefined?null:{days:value}},async run(){rows.set(this.args[0],this.args[1]);return {meta:{changes:1}}}})});
+  const one=signed({auth_date:now(),user:'{"id":123}'}),two=signed({auth_date:now(),user:'{"id":999}'}),env={BOT_TOKEN:'test:token'};
+  assert.equal((await context.miniApi(request({initData:one,action:'reminder_save',days:31}),env)).status,400);
+  assert.equal((await context.miniApi(request({initData:one,action:'reminder_save',days:0}),env)).status,200);
+  assert.equal((await (await context.miniApi(request({initData:one,action:'reminder_get'}),env)).json()).days,0);
+  assert.equal((await (await context.miniApi(request({initData:two,action:'reminder_get'}),env)).json()).days,3);
 });

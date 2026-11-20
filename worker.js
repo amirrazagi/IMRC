@@ -126,6 +126,10 @@ function getDB(env) {
         env.DB.prepare("CREATE TABLE IF NOT EXISTS incidents(id INTEGER PRIMARY KEY AUTOINCREMENT, title TEXT, level TEXT, body TEXT, started INTEGER, resolved INTEGER)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS location_status(code TEXT PRIMARY KEY, level TEXT NOT NULL, note TEXT NOT NULL DEFAULT '', updated INTEGER NOT NULL)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS mini_config_presets(tg_id TEXT PRIMARY KEY, config TEXT NOT NULL, updated INTEGER NOT NULL)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS game_profiles(tg_id TEXT NOT NULL, name TEXT NOT NULL, config TEXT NOT NULL, updated INTEGER NOT NULL, PRIMARY KEY(tg_id,name))"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS reminder_settings(tg_id TEXT PRIMARY KEY, days INTEGER NOT NULL)"),
+        env.DB.prepare("CREATE TABLE IF NOT EXISTS mini_notices(id INTEGER PRIMARY KEY AUTOINCREMENT,tg_id TEXT NOT NULL,ts INTEGER NOT NULL,kind TEXT NOT NULL,text TEXT NOT NULL)"),
+        env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_mini_notices_tg ON mini_notices(tg_id,id)"),
         env.DB.prepare("CREATE TABLE IF NOT EXISTS wallet(tg_id TEXT PRIMARY KEY, balance INTEGER DEFAULT 0)"),
         env.DB.prepare(`CREATE TABLE IF NOT EXISTS wallet_quotes(
           token TEXT PRIMARY KEY, tg_id TEXT NOT NULL, kind TEXT NOT NULL, amount INTEGER NOT NULL,
@@ -148,7 +152,7 @@ function getDB(env) {
         env.DB.prepare("CREATE INDEX IF NOT EXISTS idx_chat_unread ON chat_msgs(sender, read_admin)"),
       ]);
       // ستون‌های جدید روی جدول‌های قبلی (اگه از قبل باشن خطا می‌ده و نادیده گرفته می‌شه)
-      for (const sql of ["ALTER TABLE pending_buy ADD COLUMN use_wallet INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN wallet_used INTEGER DEFAULT 0", "ALTER TABLE pending_buy ADD COLUMN topup INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN kind TEXT DEFAULT 'sub'", "ALTER TABLE server_orders ADD COLUMN payment_token TEXT", "ALTER TABLE server_deliveries ADD COLUMN kind TEXT", "ALTER TABLE server_deliveries ADD COLUMN file_id TEXT", "ALTER TABLE server_deliveries ADD COLUMN file_name TEXT", "ALTER TABLE tickets ADD COLUMN category TEXT DEFAULT 'general'"]) {
+      for (const sql of ["ALTER TABLE pending_buy ADD COLUMN use_wallet INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN wallet_used INTEGER DEFAULT 0", "ALTER TABLE pending_buy ADD COLUMN topup INTEGER DEFAULT 0", "ALTER TABLE receipts ADD COLUMN kind TEXT DEFAULT 'sub'", "ALTER TABLE server_orders ADD COLUMN payment_token TEXT", "ALTER TABLE server_deliveries ADD COLUMN kind TEXT", "ALTER TABLE server_deliveries ADD COLUMN file_id TEXT", "ALTER TABLE server_deliveries ADD COLUMN file_name TEXT", "ALTER TABLE tickets ADD COLUMN category TEXT DEFAULT 'general'", "ALTER TABLE server_orders ADD COLUMN delivered_at INTEGER"]) {
         try { await env.DB.prepare(sql).run(); } catch (e) { /* already exists */ }
       }
       for (const col of ["tg_id", "tg_name", "tg_username"]) {
@@ -274,11 +278,25 @@ async function miniApi(request, env) {
     const rows = (await db.prepare("SELECT code,level,note,updated FROM location_status ORDER BY code").all()).results || [];
     return json({ locations: rows.map(r => ({ ...r, name: BOT_COUNTRIES.find(c => c.code === r.code)?.name || r.code })) }, 200, { "Cache-Control": "no-store" });
   }
+  if (body.action === "reminder_get") {
+    const row = await db.prepare("SELECT days FROM reminder_settings WHERE tg_id=?").bind(id).first();
+    const st = await getSettings(db);
+    return json({ days: row ? row.days : st.remind_days }, 200, { "Cache-Control": "no-store" });
+  }
+  if (body.action === "reminder_save") {
+    if (!Number.isInteger(body.days) || body.days < 0 || body.days > 30) return json({ error: "روز یادآوری باید از ۰ تا ۳۰ باشد" }, 400);
+    await db.prepare("INSERT INTO reminder_settings(tg_id,days) VALUES(?,?) ON CONFLICT(tg_id) DO UPDATE SET days=excluded.days").bind(id, body.days).run();
+    return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+  }
+  if (body.action === "notifications") {
+    const notices = (await db.prepare("SELECT id,ts,kind,text FROM mini_notices WHERE tg_id=? ORDER BY id DESC LIMIT 100").bind(id).all()).results || [];
+    return json({ notices }, 200, { "Cache-Control": "no-store" });
+  }
   if (body.action === "orders") {
-    const orders = (await db.prepare(`SELECT id,product,volume,days,users,amount,status,created FROM server_orders WHERE tg_id=? ORDER BY id DESC LIMIT 50`).bind(id).all()).results || [];
+    const orders = (await db.prepare(`SELECT id,product,volume,days,users,amount,status,created,decided,delivered_at,payment_token FROM server_orders WHERE tg_id=? ORDER BY id DESC LIMIT 50`).bind(id).all()).results || [];
     const deliveries = (await db.prepare(`SELECT d.order_id,d.source_message,d.created,d.kind,d.file_name,CASE WHEN d.file_id IS NOT NULL THEN 1 ELSE 0 END downloadable
       FROM server_deliveries d JOIN server_orders o ON o.id=d.order_id WHERE o.tg_id=? ORDER BY d.created DESC LIMIT 200`).bind(id).all()).results || [];
-    return json({ orders: orders.map(o => ({ ...o, product_name: SERVER_PRODUCTS[o.product]?.name || o.product, files: deliveries.filter(d => d.order_id === o.id) })) }, 200, { "Cache-Control": "no-store" });
+    return json({ orders: orders.map(o => ({ ...o, payment_method: o.payment_token ? "wallet" : "receipt", payment_token: undefined, product_name: SERVER_PRODUCTS[o.product]?.name || o.product, files: deliveries.filter(d => d.order_id === o.id) })) }, 200, { "Cache-Control": "no-store" });
   }
   if (body.action === "wallet_history") {
     const transactions = (await db.prepare("SELECT id,ts,delta,reason FROM wallet_log WHERE tg_id=? ORDER BY id DESC LIMIT 100").bind(id).all()).results || [];
@@ -295,6 +313,25 @@ async function miniApi(request, env) {
     return json({ countries: BOT_COUNTRIES.map(c => ({ code: c.code, name: c.name, flag: c.flag, locked: botLocked(q, "r", c.code) })),
       modes: BOT_MODES, roles: BOT_ROLES, dns: BOT_DNS.map(d => ({ label: d.label, value: d.v, locked: botLocked(q, "d", d.v) })),
       mtu: BOT_MTU, unlock: q.unlock, remaining: q.remaining }, 200, { "Cache-Control": "no-store" });
+  }
+  if (body.action === "game_profiles") {
+    const profiles = (await db.prepare("SELECT name,config,updated FROM game_profiles WHERE tg_id=? ORDER BY updated DESC LIMIT 10").bind(id).all()).results || [];
+    return json({ profiles: profiles.flatMap(p => { try { return [{ name: p.name, config: JSON.parse(p.config), updated: p.updated }]; } catch { return []; } }) }, 200, { "Cache-Control": "no-store" });
+  }
+  if (body.action === "game_profile_save" || body.action === "game_profile_delete") {
+    const name = typeof body.name === "string" ? body.name.trim() : "";
+    if (!name || name.length > 40 || /[\u0000-\u001f]/.test(name)) return json({ error: "نام پروفایل نامعتبر است" }, 400);
+    if (body.action === "game_profile_delete") {
+      await db.prepare("DELETE FROM game_profiles WHERE tg_id=? AND name=?").bind(id, name).run();
+      return json({ ok: true }, 200, { "Cache-Control": "no-store" });
+    }
+    if (!validMiniConfig(body.config)) return json({ error: "تنظیمات کانفیگ نامعتبر است" }, 400);
+    const b = body.config, config = { region: b.region, mode: b.mode, role: b.role, dns: b.dns, mtu: String(b.mtu || ""), name: String(b.name || "").slice(0, 15) };
+    const result = await db.prepare(`INSERT INTO game_profiles(tg_id,name,config,updated) SELECT ?,?,?,? WHERE
+      (SELECT COUNT(*) FROM game_profiles WHERE tg_id=?) < 10 OR EXISTS(SELECT 1 FROM game_profiles WHERE tg_id=? AND name=?)
+      ON CONFLICT(tg_id,name) DO UPDATE SET config=excluded.config,updated=excluded.updated`).bind(id,name,JSON.stringify(config),Date.now(),id,id,name).run();
+    if (!result.meta.changes) return json({ error: "حداکثر ۱۰ پروفایل قابل ذخیره است" }, 400);
+    return json({ ok: true }, 200, { "Cache-Control": "no-store" });
   }
   if (body.action === "config_preset_get") {
     const row = await db.prepare("SELECT config FROM mini_config_presets WHERE tg_id=?").bind(id).first();
@@ -355,6 +392,9 @@ async function miniApi(request, env) {
 
 function validMiniConfig(b) {
   return !!b && typeof b === "object" && BOT_COUNTRIES.some(c => c.code === b.region) && Object.hasOwn(BOT_MODES, b.mode) && Object.hasOwn(BOT_ROLES, b.role) && BOT_DNS.some(d => d.v === b.dns) && (b.mtu === "" || (/^[0-9]{3,4}$/.test(String(b.mtu)) && Number(b.mtu) >= 576 && Number(b.mtu) <= 1500));
+}
+async function recordMiniNotice(db, id, kind, text) {
+  await db.prepare("INSERT INTO mini_notices(tg_id,ts,kind,text) VALUES(?,?,?,?)").bind(String(id), Date.now(), kind, String(text).slice(0, 500)).run();
 }
 async function miniTicketSend(env, db, user, id, raw, rawCategory) {
   const categories = { general: "عمومی", payment: "پرداخت", connection: "اتصال", delivery: "تحویل" };
@@ -1411,13 +1451,14 @@ async function serverDecide(env, db, cq, id, action, answer) {
     if (order.status !== "approved") return answer("این سفارش باز و تأییدشده نیست.");
     const count = await db.prepare("SELECT COUNT(*) n FROM server_deliveries WHERE order_id=?").bind(id).first();
     if (!count || !count.n) return answer("ابتدا فایل یا اطلاعات سرویس را با Reply به رسید ارسال کنید.");
-    const res = await db.prepare("UPDATE server_orders SET status='delivered' WHERE id=? AND status='approved'").bind(id).run();
+    const res = await db.prepare("UPDATE server_orders SET status='delivered',delivered_at=? WHERE id=? AND status='approved'").bind(Date.now(), id).run();
     if (!res.meta.changes) return answer("این سفارش قبلاً بسته شده است.");
     const sent = await tg(env, "sendMessage", { chat_id: order.tg_id, text: `✅ سفارش سرور #${id} تحویل داده شد و بسته شد. فایل‌ها و اطلاعات سرویس در پیام‌های قبلی همین چت قرار دارند.` }).catch(() => ({ ok: false }));
     if (!sent.ok) {
-      await db.prepare("UPDATE server_orders SET status='approved' WHERE id=? AND status='delivered'").bind(id).run();
+      await db.prepare("UPDATE server_orders SET status='approved',delivered_at=NULL WHERE id=? AND status='delivered'").bind(id).run();
       return answer("پیام به مشتری نرسید؛ سفارش باز ماند، دوباره تلاش کنید.");
     }
+    await recordMiniNotice(db, order.tg_id, "order", `سفارش سرور #${id} تحویل داده شد.`).catch(() => {});
     await tg(env, "editMessageReplyMarkup", { chat_id: adminTgId(env), message_id: order.admin_msg_id, reply_markup: { inline_keyboard: [] } }).catch(() => {});
     return answer("سفارش تحویل و بسته شد ✅");
   }
@@ -1425,7 +1466,9 @@ async function serverDecide(env, db, cq, id, action, answer) {
   const status = action === "a" ? "approved" : "rejected";
   const res = await db.prepare("UPDATE server_orders SET status=?,decided=?,decided_by=? WHERE id=? AND status='pending'").bind(status, Date.now(), String(cq.from.id), id).run();
   if (!res.meta.changes) return answer("قبلاً بررسی شده است.");
-  await tg(env, "sendMessage", { chat_id: order.tg_id, text: action === "a" ? `✅ پرداخت سفارش سرور #${id} تأیید شد. پشتیبانی اطلاعات سرویس را برای شما ارسال می‌کند.` : `❌ رسید سفارش سرور #${id} تأیید نشد. برای پیگیری با پشتیبانی در ارتباط باشید.` }).catch(() => {});
+  const userNotice = action === "a" ? `✅ پرداخت سفارش سرور #${id} تأیید شد. پشتیبانی اطلاعات سرویس را برای شما ارسال می‌کند.` : `❌ رسید سفارش سرور #${id} تأیید نشد. برای پیگیری با پشتیبانی در ارتباط باشید.`;
+  await recordMiniNotice(db, order.tg_id, "order", userNotice).catch(() => {});
+  await tg(env, "sendMessage", { chat_id: order.tg_id, text: userNotice }).catch(() => {});
   if (action === "a") {
     const m = cq.message;
     if (m) await tg(env, "editMessageCaption", {
@@ -2259,6 +2302,7 @@ async function ticketReply(env, db, id, text) {
   const now = Date.now();
   await db.prepare("INSERT INTO ticket_msgs(ticket_id,sender,text,ts) VALUES(?,?,?,?)").bind(id, "admin", text, now).run();
   await db.prepare("UPDATE tickets SET status='open', updated=? WHERE id=?").bind(now, id).run();
+  await recordMiniNotice(db, t.tg_id, "support", `پاسخ جدید برای تیکت #${id} ثبت شد.`).catch(() => {});
   const r = await tg(env, "sendMessage", { chat_id: t.tg_id, text: `💬 پاسخ پشتیبانی (تیکت #${id}):\n\n${text}` }).catch(() => ({ ok: false }));
   return { ok: true, delivered: !!r.ok };
 }
@@ -2405,14 +2449,13 @@ async function runReminders(env) {
   if (!env.BOT_TOKEN) return;
   const db = await getDB(env);
   const st = await getSettings(db);
-  if (st.remind_days <= 0) return;
   const now = Date.now();
   const rows = (await db.prepare(
-    `SELECT s.tg_id, s.until FROM subs s LEFT JOIN reminders r ON r.tg_id=s.tg_id
-     WHERE s.until>? AND s.until<=? AND (r.until IS NULL OR r.until<>s.until)
+    `SELECT s.tg_id, s.until FROM subs s LEFT JOIN reminders r ON r.tg_id=s.tg_id LEFT JOIN reminder_settings ns ON ns.tg_id=s.tg_id
+     WHERE s.until>? AND COALESCE(ns.days,?)>0 AND s.until<=?+COALESCE(ns.days,?)*86400000 AND (r.until IS NULL OR r.until<>s.until)
        AND s.tg_id NOT IN (SELECT tg_id FROM bans)
      ORDER BY s.until LIMIT ?`
-  ).bind(now, now + st.remind_days * 86400000, REMIND_BATCH).all()).results || [];
+  ).bind(now, st.remind_days, now, st.remind_days, REMIND_BATCH).all()).results || [];
   for (const r of rows) {
     const days = Math.max(1, Math.ceil((r.until - now) / 86400000));
     const when = new Date(r.until).toLocaleDateString("fa-IR", { timeZone: "Asia/Tehran" });
@@ -2421,6 +2464,7 @@ async function runReminders(env) {
       text: fill(st.msg_reminder, { days: fa(days), date: when }),
       reply_markup: { inline_keyboard: [[{ text: "💳 تمدید اشتراک", callback_data: "menu:plans" }]] },
     }).catch(() => ({ ok: false }));
+    if (res.ok) await recordMiniNotice(db, r.tg_id, "reminder", `اشتراک شما ${fa(days)} روز دیگر منقضی می‌شود.`).catch(() => {});
     if (res.ok) await sendPush(env, db, r.tg_id, { title: "⏰ یادآوری اشتراک", body: `اشتراکت ${fa(days)} روز دیگه تموم می‌شه`, url: "/" }).catch(() => {});
     if (res.error_code === 429) break;
     // موفق یا کاربر بلاکمون کرده → دیگه تکرار نشه
@@ -2433,13 +2477,15 @@ async function runReminders(env) {
 
 /* ---------------- پیام همگانی (Cron) ---------------- */
 const BROADCAST_BATCH = 15;
-const BC_TARGETS = ["all", "sub", "free"];
+const BC_TARGETS = ["all", "sub", "free", "new7", "expiring7"];
 // گیرنده‌ها: همه‌ی کاربرهای ربات / فقط دارای اشتراک / فقط بدون اشتراک (ادمین و بن‌شده‌ها حذف)
 function audience(target, now, adminId) {
   let sql = "tg_id<>? AND tg_id NOT IN (SELECT tg_id FROM bans)";
   const p = [String(adminId || "")];
   if (target === "sub") { sql += " AND tg_id IN (SELECT tg_id FROM subs WHERE until>?)"; p.push(now); }
   if (target === "free") { sql += " AND tg_id NOT IN (SELECT tg_id FROM subs WHERE until>?)"; p.push(now); }
+  if (target === "new7") { sql += " AND created>=?"; p.push(now - 7 * 86400000); }
+  if (target === "expiring7") { sql += " AND tg_id IN (SELECT tg_id FROM subs WHERE until>? AND until<=?)"; p.push(now, now + 7 * 86400000); }
   return { sql, p };
 }
 

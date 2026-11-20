@@ -7,7 +7,7 @@ const { DatabaseSync } = require('node:sqlite');
 function setup() {
   const sql = new DatabaseSync(':memory:');
   sql.exec(`CREATE TABLE server_drafts(tg_id TEXT PRIMARY KEY, token TEXT, product TEXT, stage TEXT, volume INTEGER, days INTEGER, users INTEGER, amount INTEGER, created INTEGER);
-    CREATE TABLE server_orders(id INTEGER PRIMARY KEY AUTOINCREMENT,tg_id TEXT,product TEXT,volume INTEGER,days INTEGER,users INTEGER,amount INTEGER,file_id TEXT,status TEXT,created INTEGER,admin_msg_id INTEGER,decided INTEGER,decided_by TEXT,payment_token TEXT);
+    CREATE TABLE server_orders(id INTEGER PRIMARY KEY AUTOINCREMENT,tg_id TEXT,product TEXT,volume INTEGER,days INTEGER,users INTEGER,amount INTEGER,file_id TEXT,status TEXT,created INTEGER,admin_msg_id INTEGER,decided INTEGER,decided_by TEXT,payment_token TEXT,delivered_at INTEGER);
     CREATE TABLE server_deliveries(order_id INTEGER,source_chat TEXT,source_message INTEGER,created INTEGER,kind TEXT,file_id TEXT,file_name TEXT, PRIMARY KEY(source_chat,source_message));
     CREATE TABLE wallet_quotes(token TEXT PRIMARY KEY,tg_id TEXT,kind TEXT,amount INTEGER,plan TEXT,days INTEGER,code TEXT,percent INTEGER,pending_ts INTEGER,created INTEGER);
     CREATE TABLE wallet_payments(token TEXT PRIMARY KEY,tg_id TEXT,kind TEXT,amount INTEGER,status TEXT,created INTEGER);
@@ -17,7 +17,7 @@ function setup() {
   const db = { prepare(query) { let values = []; return { bind(...v) { values = v; return this; }, async run() { const r = sql.prepare(query).run(...values); return { meta: { changes: Number(r.changes), last_row_id: Number(r.lastInsertRowid) } }; }, async first() { return sql.prepare(query).get(...values) || null; } }; }, async batch(stmts) { sql.exec('BEGIN'); try { const results = []; for (const stmt of stmts) results.push(await stmt.run()); sql.exec('COMMIT'); return results; } catch(e) { sql.exec('ROLLBACK'); throw e; } } };
   const calls = [];
   let failPhoto = false;
-  const ctx = { console, db, calls, walletBalance: async (db, id) => sql.prepare('SELECT balance FROM wallet WHERE tg_id=?').get(id)?.balance || 0, fa: n => String(n), randHex: () => 'a'.repeat(16), isBanned: async () => false, adminTgId: env => env.ADMIN_TG_ID, isAdmin: (env, id) => String(id) === env.ADMIN_TG_ID, getSettings: async () => ({ pay_text: 'CARD' }), stampReceipt: async () => {}, tg: async (env, method, payload) => { calls.push({ method, payload }); return method === 'sendPhoto' ? (failPhoto ? { ok: false } : { ok: true, result: { message_id: 55 } }) : { ok: true }; } };
+  const ctx = { console, db, calls, recordMiniNotice: async () => {}, walletBalance: async (db, id) => sql.prepare('SELECT balance FROM wallet WHERE tg_id=?').get(id)?.balance || 0, fa: n => String(n), randHex: () => 'a'.repeat(16), isBanned: async () => false, adminTgId: env => env.ADMIN_TG_ID, isAdmin: (env, id) => String(id) === env.ADMIN_TG_ID, getSettings: async () => ({ pay_text: 'CARD' }), stampReceipt: async () => {}, tg: async (env, method, payload) => { calls.push({ method, payload }); return method === 'sendPhoto' ? (failPhoto ? { ok: false } : { ok: true, result: { message_id: 55 } }) : { ok: true }; } };
   vm.createContext(ctx);
   const source = fs.readFileSync('worker.js', 'utf8');
   vm.runInContext(source.slice(source.indexOf('// سفارش سرور:'), source.indexOf('// ===== کیف پول:')) + source.slice(source.indexOf('// همه تغییرات مالی'), source.indexOf('// پرداخت اشتراک فقط')), ctx);
