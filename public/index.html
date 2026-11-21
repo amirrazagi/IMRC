@@ -334,15 +334,21 @@
       </section>
 
       <!-- ================= TOOLS ================= -->
-      <section class="page" id="page-tools" data-title="ابزارهای کمکی">
+            <section class="page" id="page-tools" data-title="ابزارهای کمکی">
         <div class="page-h">
           <h1>ابزارهای کمکی</h1>
           <p>تست پینگ، بررسی اتصال و کانفیگ، و ابزارهای کمکی برای آماده شدن قبل از مچ.</p>
         </div>
 
+        <div class="tools-toolbar">
+          <div class="search" style="flex:1 1 100%;min-width:0"><input class="input" id="toolFilter" type="search" placeholder="جستجو و فیلتر ابزارها…" aria-label="جستجوی ابزارها"/></div>
+          <div class="row" id="toolSuggest" style="gap:.4rem;flex-wrap:wrap;align-items:center"><span class="hint" style="margin-right:.4rem">پیشنهادی:</span></div>
+          <div class="row" id="toolUsed" style="gap:.4rem;flex-wrap:wrap;align-items:center"><span class="hint" style="margin-right:.4rem">پرکاربرد:</span></div>
+        </div>
+
         <div class="grid-2">
-          <section class="card">
-            <div class="card-h"><div><h2>تست پینگ زنده</h2><p>۱۲ درخواست به سرویس‌های عمومی (Cloudflare و Google). این عدد تا حد زیادی نشان‌دهنده‌ی اتصال خودت است، نه سرور بازی.</p></div></div>
+          <section class="card" id="tool-ping">
+            <div class="card-h"><div><h2>تست پینگ زنده</h2><button class="btn sm ghost" data-act="toolGuide" data-tool="ping" style="float:right">راهنمای ابزار</button><p>۱۲ درخواست به سرویس‌های عمومی (Cloudflare و Google). این عدد تا حد زیادی نشان‌دهنده‌ی اتصال خودت است، نه سرور بازی.</p></div></div>
             <div class="row"><button class="btn primary" data-act="pingRun" id="pingRun">شروع تست</button><span class="hint" id="pingState"></span></div>
             <div class="grid-3" style="margin:.9rem 0">
               <div class="kpi"><span>میانگین (ms)</span><b id="pingAvg">–</b></div>
@@ -351,58 +357,84 @@
             </div>
             <div class="bars" id="pingBars" aria-hidden="true"></div>
             <div class="verdict" id="pingVerdict" hidden style="margin-top:.7rem"></div>
+            <div class="tool-guide" id="guide-ping" hidden>
+              <b>چه کار می‌کند:</b> ۱۲ درخواست به سرویس‌های عمومی می‌فرستد و میانگین، جیتر وافت بسته را نشان می‌دهد.<br>
+              <b>چگونه استفاده کن:</b> دکمه‌ی «شروع تست» را بزن و منتظر بمان تا 완료 شود.<br>
+              <b>نکته:</b> این عدد تخمینی است و نشان‌دهندهٔ اتصال شما است، نه سرور بازی.
+            </div>
           </section>
 
-          <section class="card">
-            <div class="card-h"><div><h2>اطلاعات اتصال</h2><p>آنچه مرورگر از شبکه‌ی تو می‌داند.</p></div><button class="btn sm" data-act="netRefresh">بروزرسانی</button></div>
+          <section class="card" id="tool-net">
+            <div class="card-h"><div><h2>اطلاعات اتصال</h2><button class="btn sm ghost" data-act="toolGuide" data-tool="net" style="float:right">راهنمای ابزار</button><p>آنچه مرورگر از شبکه‌ی تو می‌داند.</p></div><button class="btn sm" data-act="netRefresh">بروزرسانی</button></div>
             <pre class="config-box" id="netInfo">—</pre>
+            <div class="tool-guide" id="guide-net" hidden>
+              <b>چه کار می‌کند:</b> نوع اتصال، سرعت، تأخیر، منطقه‌ی زمانی و زبان مرورگر را نمایش می‌دهد.<br>
+              <b>چگونه استفاده کن:</b> دکمه‌ی «بروزرسانی» را بزن.
+            </div>
           </section>
         </div>
 
         <div class="grid-2" style="margin-top:1rem">
-          <section class="card">
-            <div class="card-h"><div><h2>بررسی کانفیگ WireGuard</h2><p>متن کانفیگ را بچسبان. بررسی فقط داخل مرورگر انجام می‌شود و چیزی به سرور فرستاده نمی‌شود.</p></div></div>
+          <section class="card" id="tool-cfg">
+            <div class="card-h"><div><h2>بررسی کانفیگ WireGuard</h2><button class="btn sm ghost" data-act="toolGuide" data-tool="cfg" style="float:right">راهنمای ابزار</button><p>متن کانفیگ را بچسبان. بررسی فقط داخل مرورگر انجام می‌شود و چیزی به سرور فرستاده نمی‌شود.</p></div></div>
             <textarea class="input mono" id="cfgIn" rows="6" placeholder="[Interface]&#10;PrivateKey = ..." aria-label="متن کانفیگ"></textarea>
             <div class="row" style="margin-top:.6rem">
               <button class="btn primary" data-act="cfgRun">بررسی</button>
               <button class="btn" data-act="cfgFromLast">آخرین کانفیگ ساخته‌شده</button>
             </div>
             <ul class="check-list" id="cfgOut"></ul>
+            <div class="tool-guide" id="guide-cfg" hidden>
+              <b>چه کار می‌کند:</b> ساختاری فایل کانفیگ را چک می‌کند و نقصها را لیست می‌کند.<br>
+              <b>چگونه استفاده کن:</b> متن کانفیگ را بچسبانید و «بررسی» را بزنید.
+            </div>
           </section>
 
-          <section class="card">
-            <div class="card-h"><div><h2>پیشنهاد حساسیت</h2><p>نقطه‌ی شروع است؛ بعدش ۵٪ ۵٪ تنظیم کن.</p></div></div>
+          <section class="card" id="tool-sen">
+            <div class="card-h"><div><h2>پیشنهاد حساسیت</h2><button class="btn sm ghost" data-act="toolGuide" data-tool="sen" style="float:right">راهنمای ابزار</button><p>نقطه‌ی شروع است؛ بعدش ۵٪ ۵٪ تنظیم کن.</p></div></div>
             <div class="grid-2">
-              <div class="field"><label for="senDev">گوشی</label>
-                <select class="input" id="senDev"><option value="1">گوشی کوچک</option><option value="2" selected>گوشی بزرگ</option><option value="3">تبلت</option></select></div>
-              <div class="field"><label for="senStyle">سبک بازی</label>
-                <select class="input" id="senStyle"><option value="a">تهاجمی</option><option value="b" selected>متعادل</option><option value="c">اسنایپر</option></select></div>
+              <div class="field"><label for="senDev">گوشی</label><select class="input" id="senDev"><option value="1">گوشی کوچک</option><option value="2" selected>گوشی بزرگ</option><option value="3">تبلت</option></select></div>
+              <div class="field"><label for="senStyle">سبک بازی</label><select class="input" id="senStyle"><option value="a">تهاجمی</option><option value="b" selected>متعادل</option><option value="c">اسنایپر</option></select></div>
             </div>
             <div class="row" style="margin-top:.7rem"><button class="btn" data-act="senRun">پیشنهاد بده</button></div>
             <pre class="config-box" id="senOut" style="margin-top:.6rem" hidden></pre>
+            <div class="tool-guide" id="guide-sen" hidden>
+              <b>چه کار می‌کند:</b> بر اساس دستگاه و سبک بازی، حساسیت دوربین پیشنهادی می‌دهد.<br>
+              <b>چگونه استفاده کن:</b> دستگاه و سبک را انتخاب کرده «پیشنهاد بده» را بزنید.
+            </div>
           </section>
         </div>
 
         <div class="grid-2" style="margin-top:1rem">
-          <section class="card">
-            <div class="card-h"><div><h2>تست زمان واکنش</h2><p>وقتی جعبه سبز شد، سریع بزن.</p></div></div>
+          <section class="card" id="tool-react">
+            <div class="card-h"><div><h2>تست زمان واکنش</h2><button class="btn sm ghost" data-act="toolGuide" data-tool="react" style="float:right">راهنمای ابزار</button><p>وقتی جعبه سبز شد، سریع بزن.</p></div></div>
             <button class="btn block" id="reactBox" data-act="react" style="min-height:96px;font-size:1.05rem">برای شروع بزن</button>
             <p class="hint" id="reactOut" style="margin-top:.6rem"></p>
+            <div class="tool-guide" id="guide-react" hidden>
+              <b>چه کار می‌کند:</b> زمان واکنش شما را به میلی‌ثانیه اندازه می‌گیرد و بهترین را ثبت می‌کند.<br>
+              <b>چگونه استفاده کن:</b> دکمه را بزن، وقتی سبز شد سریعاً دوباره بزن.
+            </div>
           </section>
 
-          <section class="card">
-            <div class="card-h"><div><h2>چک‌لیست قبل از مچ</h2></div><button class="btn sm ghost" data-act="checkReset">پاک کردن</button></div>
+          <section class="card" id="tool-check">
+            <div class="card-h"><div><h2>چک‌لیست قبل از مچ</h2><button class="btn sm ghost" data-act="toolGuide" data-tool="check" style="float:right">راهنمای ابزار</button></div><button class="btn sm ghost" data-act="checkReset">پاک کردن</button></div>
             <div class="list" id="checkList"></div>
+            <div class="tool-guide" id="guide-check" hidden>
+              <b>چه کار می‌کند:</b> لیستی از مواردی که قبل از شروع مچ باید بررسی شود.<br>
+              <b>چگونه استفاده کن:</b> موارد انجام‌شده را تیک بزنید؛ روی همین مرورگر ذخیره می‌شود.
+            </div>
           </section>
         </div>
 
-        <section class="card" style="margin-top:1rem">
-          <div class="card-h"><div><h2>یادداشت</h2><p>نکته‌های مچ، حساسیت‌ها و هر چیزی که می‌خواهی یادت بماند. روی همین مرورگر ذخیره می‌شود.</p></div></div>
+        <section class="card" id="tool-notes" style="margin-top:1rem">
+          <div class="card-h"><div><h2>یادداشت</h2><button class="btn sm ghost" data-act="toolGuide" data-tool="notes" style="float:right">راهنمای ابزار</button><p>نکته‌های مچ، حساسیت‌ها و هر چیزی که می‌خواهی یادت بماند. روی همین مرورگر ذخیره می‌شود.</p></div></div>
           <textarea class="input" id="notesText" rows="6" placeholder="لودات، حساسیت‌ها، نکته‌های مچ…" aria-label="یادداشت"></textarea>
+          <div class="tool-guide" id="guide-notes" hidden>
+            <b>چه کار می‌کند:</b> یادداشت متن را روی همین مرورگر ذخیره می‌کند.<br>
+            <b>چگونه استفاده کن:</b> متن را بنویسید؛ هر تغییر خودکار ذخیره می‌شود.
+          </div>
         </section>
       </section>
-
-      <!-- ================= STATS ================= -->
+<!-- ================= STATS ================= -->
       <section class="page" id="page-stats" data-title="آمار و سوابق">
         <div class="page-h">
           <h1>آمار و سوابق</h1>
@@ -589,10 +621,11 @@
         </div>
         <div class="grid-2" style="margin-top:1rem">
           <section class="card">
-            <div class="card-h"><div><h2>داده‌های این مرورگر</h2><p>بکاپ شامل تاریخچه‌ی کانفیگ‌هاست؛ آن را امن نگه دار.</p></div></div>
+            <div class="card-h"><div><h2>داده‌های این مرورگر</h2></div></div>
+            <p class="hint" style="margin-bottom:.6rem">بکاپ شامل تاریخچه‌ی کانفیگ، ابزارها و شخصی‌سازی است.</p>
             <div class="row">
-              <button class="btn" data-act="backup">بکاپ</button>
-              <button class="btn" data-act="restore">بازگردانی</button>
+              <button class="btn" data-act="backup">خروجی Workspace</button>
+              <button class="btn" data-act="restore">واردکردن Workspace</button>
               <button class="btn danger" data-act="clearAll">پاک کردن همه‌ی داده‌ها</button>
             </div>
           </section>
@@ -602,6 +635,25 @@
             <button class="btn danger" data-act="logoutAll">خروج از همه‌ی دستگاه‌ها</button>
           </section>
         </div>
+        <div class="grid-2" style="margin-top:1rem">
+          <section class="card">
+            <div class="card-h"><div><h2>شخصی‌سازی ابزارها</h2></div></div>
+            <p class="hint">ابزارهایی را که نمی‌خواهید نمایش داده شوند، پنهان کنید.</p>
+            <div class="stack" id="toolCustomize"></div>
+          </section>
+
+          <section class="card">
+            <div class="card-h"><div><h2>مختبر (آزمایشی)</h2></div></div>
+            <div class="lab-warn">⚠️ این بخش laboratoire است؛ ممکن است در نسخه‌های آینده تغییر یابد یا حذف شود.</div>
+            <label class="check"><input type="checkbox" id="tgLab" data-toggle="lab"/> فعال کردن مختبر</label>
+            <div id="labFlags" style="margin-top:.6rem;display:none">
+              <label class="check"><input type="checkbox" id="tgLabGraph" data-toggle="labgraph"/> نمودار پینگ پیشرفته</label>
+              <label class="check"><input type="checkbox" id="tgLabExport" data-toggle="labexport"/> خروجی پیشرفته Workspace</label>
+              <label class="check"><input type="checkbox" id="tgLabShortcuts" data-toggle="labshortcuts"/> میانبرهای سریع اضافی</label>
+            </div>
+          </section>
+        </div>
+
         <section class="card" style="margin-top:1rem">
           <div class="card-h"><div><h2>میانبرهای کیبورد</h2></div></div>
           <div class="lbl-grid">
@@ -609,6 +661,39 @@
             <span><b>Esc</b> بستن پنجره</span><span><b>Enter</b> ارسال پیام پشتیبانی</span>
           </div>
         </section>
+      </section>
+      <section class="page page-whatsnew" id="page-whatsnew" data-title="قابلیت‌های جدید">
+        <div class="page-h">
+          <h1>قابلیت‌های جدید <span class="new" id="whatsNewVer">نسخه ۲٫۰</span></h1>
+          <p>قابلیت‌های اضافه‌شده در این نسخه (همه رایگان و تماماً داخل مرورگر):</p>
+        </div>
+        <div class="wn">
+          <h2>ابزارها</h2>
+          <ul>
+            <li><b>فیلتر ابزارها:</b> جستجو و فیلتر سریع ابزارها بر اساس عنوان و برچسب.</li>
+            <li><b>ابزارهای پیشنهادی و پرکاربرد:</b> بر اساس استفاده‌ی شما و وضعیت سرویس.</li>
+            <li><b>تاریخچه استفاده محلی:</b> ثبت خودکار آخرین ابزارهایی که اجرا کرده‌اید.</li>
+            <li><b>راهنمای هر ابزار:</b> دکمه‌ی «راهنمای ابزار» روی هر کارت توضیح می‌دهد.</li>
+            <li><b>میانبر اجرا:</b> Ctrl+K → انتخاب ابزار (پینگ، کانفیگ، حساسیت، واکنش).</li>
+          </ul>
+        </div>
+        <div class="wn">
+          <h2>Workspace و تنظیمات</h2>
+          <ul>
+            <li><b>خروجی/واردکردن Workspace:</b> بکاپ و بازگردانی حالا تاریخچه‌ی ابزار و شخصی‌سازی را هم در بر می‌گیرد.</li>
+            <li><b>شخصی‌سازی ابزارها:</b> نمایش/پنهان کردن ابزارها در تنظیمات.</li>
+            <li><b>مختبر (آزمایشی):</b> قابلیت‌های آزمایشی با هشدار و راهنمای کامل.</li>
+          </ul>
+        </div>
+        <div class="wn">
+          <h2>وضعیت سرویس</h2>
+          <ul>
+            <li><b>بنر وضعیت:</b> اعلان حادثه و اختلال بالای پنل.</li>
+            <li><b>اعلان مرورگر:</b> دنبال‌کردن وضعیت با Web Push.</li>
+            <li><b>ویزارد ساخت:</b> سه مرحلهای انتخاب سرور، تنظیمات و دانلود.</li>
+          </ul>
+        </div>
+        <div class="row"><button class="btn" data-act="whatsNewSeen">دیدهم، ممنون</button></div>
       </section>
     </main>
   </div>
@@ -621,6 +706,7 @@
   <button data-page="tools"><span class="ico" aria-hidden="true">🧰</span>ابزارها</button>
   <button data-page="stats"><span class="ico" aria-hidden="true">📊</span>آمار</button>
   <button data-page="support"><span class="ico" aria-hidden="true">💬</span>پشتیبانی<span class="count" data-chat-badge hidden>۰</span></button>
+  <button data-page="whatsnew"><span class="ico" aria-hidden="true">🆕</span>جدید<span class="badge" id="whatsNewBadge">جدید</span></button>
   <button data-act="palette"><span class="ico" aria-hidden="true">☰</span>بیشتر</button>
 </nav>
 

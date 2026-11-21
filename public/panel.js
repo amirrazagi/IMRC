@@ -58,7 +58,7 @@
   ];
   const THEME_IDS = THEMES.map((t) => t[0]);
   const PAGES = {
-    home: "خانه", build: "ساخت کانفیگ", tools: "ابزارهای کمکی",
+    home: "خانه", build: "ساخت کانفیگ", tools: "ابزارهای کمکی", whatsnew: "قابلیت‌های جدید",
     stats: "آمار و سوابق", support: "پشتیبانی آنلاین", help: "راهنما", settings: "تنظیمات",
   };
   const HIST_MAX = 20;
@@ -310,8 +310,11 @@
     if (page === "stats") { renderStats(); renderHistory(); }
     if (page === "support") loadChat(true);
     scheduleChat();
+    if (page === "tools") renderToolsToolbar();
+    if (page === "whatsnew") markWhatsNewSeen();
     if (page === "home") renderStart();
     if (page === "help") renderFaq();
+    if (page === "settings") { renderToolsCustomize(); const lab=$("tgLab"); const lf=$("labFlags"); if(lab&&lf) lf.style.display = lab.checked ? "block" : "none"; }
     return page;
   }
 
@@ -750,6 +753,12 @@
       hist: hist(), favs: favs(), theme: store.get("IMRC_theme", null), font: store.get("IMRC_font", 15),
       goal: store.get("IMRC_goal", null),
       notes: store.get("IMRC_notes", ""), checks: store.get("IMRC_chk", {}),
+    toolUse: store.get("IMRC_toolUse", {}), toolHist: store.get("IMRC_toolHist", []),
+    toolLayout: store.get("IMRC_toolLayout", { hidden: [] }),
+    labEnabled: store.get("IMRC_labEnabled", false),
+    labGraph: store.get("IMRC_lab_graph", false),
+    labExport: store.get("IMRC_lab_export", false),
+    labShortcuts: store.get("IMRC_lab_shortcuts", false),
     };
     forceDownload(JSON.stringify(data, null, 2), "IMRC_Backup.json");
     toast("بکاپ دانلود شد");
@@ -777,6 +786,13 @@
       if (Number.isFinite(d.goal) && d.goal >= 10 && d.goal <= 300) store.set("IMRC_goal", Math.round(d.goal));
       if (typeof d.notes === "string") store.set("IMRC_notes", d.notes.slice(0, 5000));
       if (d.checks && typeof d.checks === "object") store.set("IMRC_chk", Object.fromEntries(Object.entries(d.checks).filter(([k, v]) => /^\d+$/.test(k) && typeof v === "boolean")));
+      if (d.toolUse && typeof d.toolUse === "object") store.set("IMRC_toolUse", d.toolUse);
+      if (Array.isArray(d.toolHist)) store.set("IMRC_toolHist", d.toolHist.slice(0, TOOL_HIST_MAX));
+      if (d.toolLayout && typeof d.toolLayout === "object") store.set("IMRC_toolLayout", d.toolLayout);
+      if (typeof d.labEnabled === "boolean") store.set("IMRC_labEnabled", d.labEnabled);
+      if (typeof d.labGraph === "boolean") store.set("IMRC_lab_graph", d.labGraph);
+      if (typeof d.labExport === "boolean") store.set("IMRC_lab_export", d.labExport);
+      if (typeof d.labShortcuts === "boolean") store.set("IMRC_lab_shortcuts", d.labShortcuts);
       toast("✅ بازگردانی انجام شد");
       setTimeout(() => location.reload(), 600);
     };
@@ -797,12 +813,116 @@
     setTimeout(() => location.reload(), 700);
   }
 
+  /* ============================== tools data ============================== */
+  const TOOL_HIST_MAX = 60;
+  const TOOLS = [
+    { id: "ping", title: "تست پینگ زنده", tags: ["شبکه", "پینگ"] },
+    { id: "net", title: "اطلاعات اتصال", tags: ["شبکه"] },
+    { id: "cfg", title: "بررسی کانفیگ", tags: ["کانفیگ", "ایمن"] },
+    { id: "sen", title: "پیشنهاد حساسیت", tags: ["حساسیت"] },
+    { id: "react", title: "تست زمان واکنش", tags: ["واکنش"] },
+    { id: "check", title: "چک‌لیست قبل از مچ", tags: ["آماده‌سازی"] },
+    { id: "notes", title: "یادداشت مچ", tags: ["یادداشت"] },
+  ];
+  const GUIDES = {
+    ping: "۱۲ درخواست به سرویس‌های عمومی (Cloudflare و Google) می‌فرستد و میانگین، جیتر وافت بسته را نشان می‌دهد. این عدد نشان‌دهندهٔ اتصال شما است، نه سرور بازی.",
+    net: "نوع اتصال، سرعت تقریبی، تأخیر (RTT), صرفه‌جویی داده، منطقه‌ی زمانی و زبان مرورگر را نمایش می‌دهد.",
+    cfg: "ساختاری فایل کانفیگ WireGuard را چک می‌کند: داشتن بخش‌های Interface و Peer، معتبر بودن کلیدها، آدرس و این‌پوینت.",
+    sen: "بر اساس نوع دستگاه و سبک بازی (تهاجمی/متعادل/اسنایپر)، حساسیت-role پیشنهادی دوربین را می‌دهد. نقطه‌ی شروع است؛ بعداً ۵٪ ۵٪ تنظیم کنید.",
+    react: "زمان واکنش را به میلی‌ثانیه اندازه می‌گیرد. دکمه را بزنید، وقتی جعبه سبز شد سریعاً دوباره بزنید؛ بهترین نتيجه ثبت می‌شود.",
+    check: "لیستresources قبل از شروع مچ (شارژ، اپ‌های پس‌زمینه، وای‌فای، پینگ، حساسیت). موارد انجام‌شده را تیک بزنید.",
+    notes: "یادداشت متنی برای لودات، حساسیت‌ها و نکته‌های مچ. هر تغییر روی همین مرورگر ذخیره می‌شود.",
+  };
+  function trackTool(id) {
+    const u = store.get("IMRC_toolUse", {});
+    const e = u[id] || { count: 0, lastRun: 0 };
+    e.count = (e.count || 0) + 1; e.lastRun = Date.now(); u[id] = e;
+    store.set("IMRC_toolUse", u);
+    const h = store.get("IMRC_toolHist", []);
+    h.push({ id, ts: Date.now() });
+    while (h.length > TOOL_HIST_MAX) h.shift();
+    store.set("IMRC_toolHist", h);
+  }
+  const TOOL_RUN = {
+    ping: () => { trackTool("ping"); pingRun(); },
+    net: () => { trackTool("net"); netInfo(); },
+    cfg: () => { trackTool("cfg"); cfgRun(); },
+    sen: () => { trackTool("sen"); senRun(); },
+    react: () => { trackTool("react"); reactClick(); },
+    check: () => { trackTool("check"); renderChecklist(); },
+    notes: () => { trackTool("notes"); $("notesText").focus(); },
+  };
+
+  function markWhatsNewSeen() {
+    store.set("IMRC_whatsNewSeen", "2.0");
+    const b = $("whatsNewBadge");
+    if (b) b.hidden = true;
+  }
+  if (store.get("IMRC_whatsNewSeen") === "2.0") {
+    const b = $("whatsNewBadge");
+    if (b) b.hidden = true;
+  }
+
+  function renderToolsToolbar() {
+    if (!$("toolFilter")) return;
+    const q = ($("toolFilter").value || "").toLowerCase();
+    const use = store.get("IMRC_toolUse", {});
+    const top = Object.entries(use).sort((a, b) => (b[1].count || 0) - (a[1].count || 0)).slice(0, 4).map(([id]) => id);
+    const hist = store.get("IMRC_toolHist", []);
+    const lastId = hist.length ? hist[hist.length - 1].id : null;
+    const suggest = [];
+    if (S.last && !suggest.includes("cfg")) suggest.push("cfg");
+    if (lastId && !suggest.includes(lastId)) suggest.push(lastId);
+    for (const id of top) { if (!suggest.includes(id)) suggest.push(id); if (suggest.length >= 3) break; }
+    const chips = (ids, container, label) => {
+      const el = $(container); if (!el) return;
+      el.innerHTML = '<span class="hint" style="margin-right:.4rem">' + label + '</span>' + ids.map((id) => {
+        const t = TOOLS.find((x) => x.id === id); if (!t) return "";
+        return '<button class="chip tool-chip" data-act="runTool" data-tool="' + id + '" title="' + esc(t.title) + '">' + esc(t.title) + '</button>';
+      }).join("");
+    };
+    chips(suggest, "toolSuggest", "پیشنهادی:");
+    chips(top, "toolUsed", "پرکاربرد:");
+    const layout = store.get("IMRC_toolLayout", { hidden: [] });
+    const hidden = Array.isArray(layout.hidden) ? layout.hidden : [];
+    $$(".tool-card").forEach((card) => {
+      const id = card.id.replace("tool-", "");
+      const t = TOOLS.find((x) => x.id === id);
+      const match = !q || (t && (t.title.includes(q) || t.tags.some((tag) => tag.includes(q))));
+      card.hidden = !match || hidden.includes(id);
+    });
+    if ($("toolCustomize")) renderToolsCustomize();
+  }
+
   /* ============================== tools ============================== */
+  function renderToolsCustomize() {
+    const box = $("toolCustomize");
+    if (!box) return;
+    const layout = store.get("IMRC_toolLayout", { hidden: [] });
+    const hidden = Array.isArray(layout.hidden) ? layout.hidden : [];
+    box.innerHTML = TOOLS.map((t) => {
+      const h = hidden.includes(t.id);
+      return '<label class="check"><input type="checkbox" data-act="toolHide" data-tool="' + t.id + '" ' + (!h ? "checked" : "") + '/> ' + esc(t.title) + '</label>';
+    }).join("");
+  }
+  function toggleToolHide(id, checked) {
+    const layout = store.get("IMRC_toolLayout", { hidden: [] });
+    const hidden = Array.isArray(layout.hidden) ? layout.hidden : [];
+    if (checked) { const i = hidden.indexOf(id); if (i >= 0) hidden.splice(i, 1); }
+    else { if (!hidden.includes(id)) hidden.push(id); }
+    layout.hidden = hidden;
+    store.set("IMRC_toolLayout", layout);
+    renderToolsToolbar();
+    renderToolsCustomize();
+    toast(hidden.length ? "ابزار پنهان شد" : "ابزار نمایش داده شد");
+  }
+
   function renderBars(vals) {
     const mx = Math.max(60, ...vals);
     $("pingBars").innerHTML = vals.map((v) => `<i style="height:${Math.max(4, Math.round((v / mx) * 100))}%" title="${v} ms"></i>`).join("");
   }
   async function pingRun() {
+    trackTool("ping");
     if (S.pinging) return;
     S.pinging = true;
     $("pingRun").disabled = true;
@@ -845,6 +965,7 @@
     S.pinging = false;
   }
   function netInfo() {
+    trackTool("net");
     const c = navigator.connection || {};
     let tz = "";
     try { tz = Intl.DateTimeFormat().resolvedOptions().timeZone; } catch (e) {}
@@ -885,6 +1006,7 @@
     return out;
   }
   function cfgRun() {
+    trackTool("cfg");
     const res = checkConfig($("cfgIn").value);
     const bad = res.filter((r) => r.lvl === "req" && !r.ok).length;
     const warn = res.filter((r) => r.lvl === "warn" && !r.ok).length;
@@ -904,6 +1026,7 @@
     cfgRun();
   }
   function senRun() {
+    trackTool("sen");
     const d = +$("senDev").value, s = $("senStyle").value;
     const base = { a: [120, 95, 80], b: [100, 80, 65], c: [75, 60, 48] }[s];
     const f = [1.15, 1, 0.85][d - 1];
@@ -920,6 +1043,7 @@
     out.hidden = false;
   }
   function reactClick() {
+    trackTool("react");
     const b = $("reactBox");
     if (S.reactState === 0) {
       S.reactState = 1;
@@ -1364,6 +1488,10 @@
     { label: "پریست بتل‌رویال", run: () => applyPreset("br") },
     { label: "📋 کپی کل کانفیگ", run: () => copyLast("config") },
     { label: "📈 تست پینگ زنده", run: () => { go("tools"); pingRun(); } },
+    { label: "🔍 بررسی کانفیگ", run: () => { go("tools"); cfgRun(); } },
+    { label: "🎯 پیشنهاد حساسیت", run: () => { go("tools"); senRun(); } },
+    { label: "⚡ زمان واکنش", run: () => { go("tools"); reactClick(); } },
+    { label: "✨ قابلیت‌های جدید", run: () => go("whatsnew") },
     { label: "📘 شروع اینجا", run: () => showStart() },
     { label: "🌓 تغییر تم", run: () => cycleTheme() },
   ];
@@ -1450,6 +1578,9 @@
     cfgFromLast: () => cfgFromLast(),
     senRun: () => senRun(),
     react: () => reactClick(),
+    runTool: (el) => { const f=TOOL_RUN[el.dataset.tool]; if(f){ go("tools"); f(); } },
+    toolHide: (el) => { toggleToolHide(el.dataset.tool, el.checked); },
+    toolGuide: (el) => { const id=el.dataset.tool; const t=TOOLS.find((x)=>x.id===id); $("dlgTitle").textContent=t?t.title:"راهنمای ابزار"; $("dlgBody").innerHTML="<b>"+esc(t?t.title:"راهنمای ابزار")+"</b><div style='margin-top:.5rem'>"+esc(GUIDES[id]||"").replace(/\n/g,"<br>")+"</div>"; $("dlg").classList.add("on"); $("dlg").setAttribute("aria-hidden","false"); },
     checkReset: () => { store.del("IMRC_chk"); renderChecklist(); },
     trouble: (el) => showTrouble(+el.dataset.i),
     printGuide: () => window.print(),
@@ -1472,6 +1603,7 @@
     focusExit: () => { store.set("IMRC_bx_focus", false); applyPrefs(); },
     buy: () => showBuy(),
     close: () => dlgClose(),
+    whatsNewSeen: () => markWhatsNewSeen(),
   };
 
   function bindEvents() {
@@ -1512,6 +1644,10 @@
         if (t.dataset.toggle === "guide") { store.set("IMRC_bx_hide", !t.checked); applyPrefs(); return; }
         if (t.dataset.toggle === "sound") { store.set("IMRC_sound", t.checked); return; }
         if (t.dataset.toggle === "vibrate") { store.set("IMRC_vib", t.checked); if (t.checked) vibrate(50); return; }
+      if (t.dataset.toggle === "lab") { store.set("IMRC_labEnabled", t.checked); const lf=$("labFlags"); if(lf) lf.style.display = t.checked ? "block" : "none"; return; }
+      if (t.dataset.toggle === "labgraph") { store.set("IMRC_lab_graph", t.checked); return; }
+      if (t.dataset.toggle === "labexport") { store.set("IMRC_lab_export", t.checked); return; }
+      if (t.dataset.toggle === "labshortcuts") { store.set("IMRC_lab_shortcuts", t.checked); return; }
       }
       if (t.dataset.check !== undefined) {
         const st = store.get("IMRC_chk", {});
@@ -1530,6 +1666,7 @@
       else if (t.id === "faqSearch") renderFaq();
       else if (t.id === "chatIn") chatCount();
       else if (t.id === "notesText") { store.set("IMRC_notes", t.value.slice(0, 5000)); }
+      else if (t.id === "toolFilter") renderToolsToolbar();
       else if (t.id === "mtuCustom") updateSummary();
       else if (t.id === "cmdInput") paletteFilter();
     });
