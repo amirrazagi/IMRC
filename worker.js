@@ -2956,11 +2956,17 @@ async function serviceStatus(env) {
   ];
   const notice = st.status_level !== "ok" || st.status_note
     ? { level: st.status_level, text: st.status_note } : null;
+  let incident = null;
+  if (dbOk) {
+    const inc = await db.prepare("SELECT id,title,level,body,started FROM incidents WHERE resolved IS NULL ORDER BY started DESC LIMIT 1").first();
+    if (inc) incident = { id: inc.id, title: inc.title, level: inc.level, body: inc.body || "", started: inc.started };
+  }
   return {
-    overall: worst([...components.map((c) => c.status), st.status_level]),
+    overall: worst([...components.map((c) => c.status), st.status_level, incident ? incident.level : "ok"]),
     updated: now,
     components,
     notice,
+    incident,
   };
 }
 
@@ -3473,6 +3479,7 @@ async function adminIncidents(request, env) {
     const r = await db.prepare("INSERT INTO incidents(title,level,body,started,resolved) VALUES(?,?,?,?,NULL)")
       .bind(title, b.level, body, now).run();
     await audit(db, "admin", "incident_create", String(r.meta.last_row_id), `${b.level} • ${title}`);
+    await pushAll(env, db, { title: b.level === "down" ? "🔴 قطعی سرویس" : "🟠 اختلال در سرویس", body: title.slice(0, 120), url: "/status.html" });
     return json({ ok: true, id: r.meta.last_row_id });
   }
   const id = parseInt(b.id);
@@ -3481,6 +3488,7 @@ async function adminIncidents(request, env) {
     const res = await db.prepare("UPDATE incidents SET resolved=? WHERE id=? AND resolved IS NULL").bind(now, id).run();
     if (!res.meta.changes) return json({ error: "حادثه پیدا نشد یا قبلاً بسته شده" }, 400);
     await audit(db, "admin", "incident_resolve", String(id), "");
+    await pushAll(env, db, { title: "🟢 مشکل سرویس برطرف شد", body: "وضعیت سرویس به حالت عادی برگشت.", url: "/status.html" });
     return json({ ok: true });
   }
   if (b.action === "delete") {
@@ -3564,6 +3572,27 @@ async function sendPush(env, db, tgId, payload) {
       if (r.status === 404 || r.status === 410) await db.prepare("DELETE FROM push_subs WHERE endpoint=?").bind(s.endpoint).run();
       else if (r.ok) sent++;
     } catch (e) { /* شبکه یا کلید خراب: این دستگاه رد می‌شه */ }
+  }
+  return sent;
+}
+
+// اعلان وضعیت به همه دستگاه‌های عضو (بدون شناسه کاربر در پیام)
+async function pushAll(env, db, payload) {
+  if (!vapidKeys(env)) return 0;
+  const subs = (await db.prepare("SELECT endpoint,p256dh,auth FROM push_subs ORDER BY created DESC LIMIT 500").all()).results || [];
+  let sent = 0;
+  for (const s of subs) {
+    try {
+      const jwt = await vapidJwt(env, new URL(s.endpoint).origin);
+      const body = await encryptPayload(b64u.dec(s.p256dh), b64u.dec(s.auth), enc8.encode(JSON.stringify(payload)));
+      const r = await fetch(s.endpoint, {
+        method: "POST",
+        headers: { TTL: "3600", "Content-Encoding": "aes128gcm", "Content-Type": "application/octet-stream", Authorization: `vapid t=${jwt}, k=${env.VAPID_PUBLIC_KEY}` },
+        body,
+      });
+      if (r.status === 404 || r.status === 410) await db.prepare("DELETE FROM push_subs WHERE endpoint=?").bind(s.endpoint).run();
+      else if (r.ok) sent++;
+    } catch (e) { /* دستگاه نامعتبر رد می‌شود */ }
   }
   return sent;
 }

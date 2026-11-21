@@ -58,7 +58,7 @@
   ];
   const THEME_IDS = THEMES.map((t) => t[0]);
   const PAGES = {
-    home: "خانه", build: "ساخت کانفیگ", codm: "ابزارهای کالاف", tools: "ابزارهای کمکی",
+    home: "خانه", build: "ساخت کانفیگ", tools: "ابزارهای کمکی",
     stats: "آمار و سوابق", support: "پشتیبانی آنلاین", help: "راهنما", settings: "تنظیمات",
   };
   const HIST_MAX = 20;
@@ -98,19 +98,13 @@
     ["پریست", "مجموعه‌ی تنظیمات آماده برای یک هدف مشخص."],
   ];
   const CHECKS = ["شارژ گوشی بالای ۵۰٪", "اپ‌های پس‌زمینه بسته شد", "وای‌فای/دیتا پایدار است", "پینگ تست شد", "حساسیت و گرافیک چک شد", "آب و استراحت آماده است"];
-  const LOADOUT_SLOTS = ["سلاح اصلی", "سلاح فرعی", "پرک ۱", "پرک ۲", "پرک ۳"];
-  const TEAM_SLOTS = ["هم‌تیمی ۱", "هم‌تیمی ۲", "هم‌تیمی ۳", "هم‌تیمی ۴"];
   const ACH = [
     ["اولین کانفیگ", (s) => s.cfg >= 1],
     ["۵ کانفیگ", (s) => s.cfg >= 5],
     ["۱۰ کانفیگ", (s) => s.cfg >= 10],
     ["کم‌پینگ (۳ سرور زیر ۵۵)", (s) => s.low >= 3],
     ["سرور ترکیه", (s) => s.tr],
-    ["اولین مچ", (s) => s.matches >= 1],
-    ["۱۰ مچ", (s) => s.matches >= 10],
-    ["رگه ۳ برد", (s) => s.streak >= 3],
-    ["K/D بالای ۱.۵", (s) => s.matches >= 5 && s.kd >= 1.5],
-    ["هدف‌گیر ۱۵", (s) => s.aim >= 15],
+    ["۱۰ کانفیگ در یک ماه", (s) => s.cfg >= 10 && s.low >= 1],
   ];
 
   /* ============================== state ============================== */
@@ -118,7 +112,7 @@
     mode: "ranked", role: "attacker", code: "",
     favOnly: false, free: null, buyText: "", unlock: false,
     last: null, building: false, srvItems: [],
-    kills: 0, deaths: 0, pinging: false, aimTimer: null, aimOn: false, opTimer: null, opEnd: 0,
+    pinging: false,
     chatBusy: false, chatTimer: null, chatIds: "", reactState: 0, reactT: 0, reactTo: null,
   };
 
@@ -375,7 +369,7 @@
     $("srvList").innerHTML = list.map((c) => `
       <div class="srv" role="option" tabindex="0" data-code="${c.code}" aria-selected="${c.code === S.code}">
         <span class="flag" aria-hidden="true">${c.flag}</span>
-        <div style="min-width:0"><div class="nm">${esc(c.name)} ${c.codm ? '<span class="badge ok">کالاف</span>' : ""} ${isLocked(c) ? '<span class="lock">🔒 اشتراک</span>' : ""}</div>
+        <div style="min-width:0"><div class="nm">${esc(c.name)} ${isLocked(c) ? '<span class="lock">🔒 اشتراک</span>' : ""}</div>
           <small>${esc(c.games.join("، "))}</small></div>
         <span class="dot ${c.status}" title="وضعیت ${c.status}"></span>
         <span class="ms" style="color:${pingColor(c.ping)}">${fa(c.ping)} ms</span>
@@ -461,13 +455,6 @@
     toast("پریست «" + p.label + "» اعمال شد");
     track("action", { name: "applyPreset", detail: type });
   }
-  function codmOptimize() {
-    setRole("attacker");
-    applyPreset("ranked");
-    track("action", { name: "codmOptimize", detail: "" });
-    build();
-  }
-
   /* ============================== naming ============================== */
   const NAME_MAX = 15;
   function imrcName(v) {
@@ -568,7 +555,7 @@
     $("resWhen").textContent = dateStr(item.date);
     const tags = [];
     if (c) {
-      if (c.codm) tags.push('<span class="badge ok">🎯 مناسب کالاف</span>');
+      if (c.codm) tags.push('<span class="badge ok">🎮 مناسب بازی رقابتی</span>');
       tags.push('<span class="badge">' + esc(c.flag + " " + c.name) + "</span>");
       c.games.forEach((g) => tags.push('<span class="badge">' + esc(g) + "</span>"));
     }
@@ -640,18 +627,12 @@
   }
 
   /* ============================== stats & achievements ============================== */
-  function matchList() { const m = store.get("IMRC_matches", []); return Array.isArray(m) ? m : []; }
   function statsSnapshot() {
-    const h = hist(), m = matchList();
-    let streak = 0;
-    for (const x of m) { if (x.w) streak++; else break; }
-    const k = m.reduce((a, x) => a + (+x.k || 0), 0), d = m.reduce((a, x) => a + (+x.d || 0), 0);
+    const h = hist();
     return {
       cfg: h.length,
       low: h.filter((x) => (byCode(x.code) || {}).ping < 55).length,
       tr: h.some((x) => x.code === "tr"),
-      matches: m.length, streak, kd: d ? k / d : k,
-      aim: store.get("IMRC_aim", 0),
     };
   }
   function renderStats() {
@@ -767,7 +748,7 @@
     const data = {
       v: 2,
       hist: hist(), favs: favs(), theme: store.get("IMRC_theme", null), font: store.get("IMRC_font", 15),
-      goal: store.get("IMRC_goal", null), matches: matchList().slice(0, 50), aim: store.get("IMRC_aim", 0),
+      goal: store.get("IMRC_goal", null),
       notes: store.get("IMRC_notes", ""), checks: store.get("IMRC_chk", {}),
     };
     forceDownload(JSON.stringify(data, null, 2), "IMRC_Backup.json");
@@ -794,8 +775,6 @@
       if (THEME_IDS.includes(d.theme)) store.set("IMRC_theme", d.theme);
       if (Number.isFinite(d.font)) store.set("IMRC_font", clamp(Math.round(d.font), 13, 18));
       if (Number.isFinite(d.goal) && d.goal >= 10 && d.goal <= 300) store.set("IMRC_goal", Math.round(d.goal));
-      if (Array.isArray(d.matches)) store.set("IMRC_matches", d.matches.slice(0, 50).map((m) => ({ w: !!m.w, k: clamp(+m.k || 0, 0, 999), d: clamp(+m.d || 0, 0, 999), t: +m.t || Date.now() })));
-      if (Number.isFinite(d.aim)) store.set("IMRC_aim", clamp(Math.round(d.aim), 0, 999));
       if (typeof d.notes === "string") store.set("IMRC_notes", d.notes.slice(0, 5000));
       if (d.checks && typeof d.checks === "object") store.set("IMRC_chk", Object.fromEntries(Object.entries(d.checks).filter(([k, v]) => /^\d+$/.test(k) && typeof v === "boolean")));
       toast("✅ بازگردانی انجام شد");
@@ -971,119 +950,120 @@
     ).join("");
   }
 
-  /* ============================== CODM tools ============================== */
-  function ttk() {
-    const d = +$("ttkDmg").value, r = +$("ttkRpm").value, h = +$("ttkHp").value || 100;
-    const out = $("ttkOut");
-    out.hidden = false;
-    if (!(d > 0 && r > 0)) { out.className = "verdict warn"; out.textContent = "دمیج و RPM را وارد کن"; return; }
-    const shots = Math.ceil(h / d);
-    const ms = Math.round((shots - 1) * 60000 / r);
-    out.className = "verdict ok";
-    out.textContent = fa(shots) + " گلوله • TTK ≈ " + fa(ms) + " ms";
+  /* ============================== build wizard ============================== */
+  const wiz = { step: 1 };
+  function wizMarkMtu() {
+    const cur = $("#useMtu").checked ? $("#mtuSel").value : "";
+    $$("#wizStep2 [data-act='wizMtu']").forEach((b) => b.setAttribute("aria-pressed", String(b.dataset.mtu === cur)));
   }
-  function renderMatches() {
-    const m = matchList();
-    $("matchCounts").textContent = "این مچ: K " + fa(S.kills) + " · D " + fa(S.deaths);
-    const wins = m.filter((x) => x.w).length;
-    const k = m.reduce((a, x) => a + (+x.k || 0), 0), d = m.reduce((a, x) => a + (+x.d || 0), 0);
-    let summary = m.length
-      ? "<div class=\"hint\" style=\"margin-bottom:.4rem\">کل: " + fa(m.length) + " مچ • K/D " + fa(d ? (k / d).toFixed(2) : k) + " • برد " + fa(Math.round((wins / m.length) * 100)) + "٪</div>"
-      : '<div class="hint">هنوز مچی ثبت نشده</div>';
-    $("matchLog").innerHTML = summary + m.slice(0, 8).map((x) =>
-      `<div class="item"><span class="badge ${x.w ? "ok" : "bad"}">${x.w ? "برد" : "باخت"}</span><span class="meta">K ${fa(x.k)} · D ${fa(x.d)} · ${esc(dateStr(x.t))}</span></div>`
-    ).join("");
+  function wizSummary() {
+    const c = byCode(S.code) || { name: "—", flag: "" };
+    const mtu = $("#useMtu").checked ? $("#mtuSel").value : "خودکار";
+    const dns = $("#useDns").checked ? "سفارشی" : "پیش‌فرض";
+    const html = `<span>سرور:</span><b>${esc((c.flag ? c.flag + " " : "") + c.name)}</b>` +
+      `<span>حالت:</span><b>${esc(MODE_FA[S.mode] || "—")}</b>` +
+      `<span>نقش:</span><b>${esc(ROLE_SHORT[S.role] || "—")}</b>` +
+      `<span>MTU:</span><b>${esc(mtu)}</b><span>DNS:</span><b>${esc(dns)}</b>`;
+    const a = $("wizSummary1"), b = $("wizSummary2");
+    if (a) a.innerHTML = html;
+    if (b) b.innerHTML = html;
   }
-  function logMatch(win) {
-    const m = matchList();
-    m.unshift({ w: !!win, k: S.kills, d: S.deaths, t: Date.now() });
-    store.set("IMRC_matches", m.slice(0, 50));
-    S.kills = 0; S.deaths = 0;
-    renderMatches();
-    renderStats();
-    toast(win ? "🏆 برد ثبت شد" : "مچ باخت ثبت شد");
-    playSound(win ? "ok" : "warn");
+  function wizRender() {
+    const q = ($("wizSearch").value || "").trim().toLowerCase();
+    const list = COUNTRIES.filter((c) => !q || c.name.includes(q) || c.code.includes(q)).sort((a, b) => a.ping - b.ping);
+    $("wizSrv").innerHTML = list.map((c) => {
+      const locked = isLocked(c);
+      return `<button class="srv" type="button" role="option" data-wiz="${c.code}" aria-selected="${S.code === c.code}" ${locked ? 'aria-disabled="true"' : ""}>
+        <span class="flag" aria-hidden="true">${c.flag}</span>
+        <span class="nm">${esc(c.name)}${locked ? ' <span class="lock">🔒 اشتراک</span>' : ""}</span>
+        <span class="ms">${fa(c.ping)} ms</span></button>`;
+    }).join("") || '<div class="empty">کشوری با این جستجو پیدا نشد.</div>';
+    const picks = COUNTRIES.filter((c) => !isLocked(c)).sort((a, b) => a.ping - b.ping).slice(0, 3);
+    $("wizRec").innerHTML = picks.map((c) => `<button class="chip" type="button" data-wiz="${c.code}">${c.flag} ${esc(c.name)} · ${fa(c.ping)}ms</button>`).join("");
+    wizMarkMtu();
+    wizSummary();
   }
-  function renderSlots() {
-    const team = store.get("IMRC_sq", []), lo = store.get("IMRC_lo", []);
-    $("teamInputs").innerHTML = TEAM_SLOTS.map((p, i) =>
-      `<input class="input" data-slot="sq" data-i="${i}" placeholder="${esc(p)}" value="${esc(team[i] || "")}" aria-label="${esc(p)}"/>`).join("");
-    $("loadoutInputs").innerHTML = LOADOUT_SLOTS.map((p, i) =>
-      `<input class="input" data-slot="lo" data-i="${i}" placeholder="${esc(p)}" value="${esc(lo[i] || "")}" aria-label="${esc(p)}"/>`).join("");
+  function wizPick(code) {
+    const c = byCode(code);
+    if (!c) return;
+    if (isLocked(c)) { toast("🔒 این سرور مخصوص کاربران اشتراکی است"); return; }
+    selectServer(code);
+    wizRender();
+    playSound("ok");
   }
-  function saveSlots(kind) {
-    const n = kind === "lo" ? LOADOUT_SLOTS.length : TEAM_SLOTS.length;
-    const vals = Array.from({ length: n }, (_, i) => {
-      const el = document.querySelector('[data-slot="' + kind + '"][data-i="' + i + '"]');
-      return el ? el.value.slice(0, 40) : "";
-    });
-    store.set(kind === "lo" ? "IMRC_lo" : "IMRC_sq", vals);
+  function wizGo(n) {
+    wiz.step = clamp(n, 1, 3);
+    [1, 2, 3].forEach((i) => { $("wizStep" + i).hidden = i !== wiz.step; });
+    $("wizBar").style.width = Math.round((wiz.step / 3) * 100) + "%";
+    $("wizBack").hidden = wiz.step === 1;
+    $("wizNext").textContent = wiz.step === 3 ? "ساخت و دانلود فایل" : "مرحله بعد";
+    $("wizTitle").textContent = "مرحله " + fa(wiz.step) + " از ۳ — " + ["انتخاب سرور", "تنظیمات", "تأیید و ساخت"][wiz.step - 1];
+    if (wiz.step === 2) { wizMarkMtu(); wizSummary(); }
+    if (wiz.step === 3) wizSummary();
   }
-  function seasonLeft() {
-    const v = $("seasonDate").value;
-    if (!v) { $("seasonLeft").textContent = "تاریخ را وارد کن تا روزهای باقی‌مانده نشان داده شود."; return; }
-    const end = new Date(v + "T23:59:59").getTime();
-    const d = Math.ceil((end - Date.now()) / DAY);
-    $("seasonLeft").textContent = d >= 0 ? "تا پایان فصل " + fa(d) + " روز مانده" : "این فصل تمام شده است";
+  function openWizard() {
+    if (!S.code) {
+      const best = COUNTRIES.filter((c) => !isLocked(c)).sort((a, b) => a.ping - b.ping)[0];
+      if (best) selectServer(best.code);
+    }
+    $("wizSearch").value = "";
+    wizRender();
+    $("wizDlg").classList.add("on");
+    $("wizDlg").setAttribute("aria-hidden", "false");
+    document.body.style.overflow = "hidden";
+    wizGo(1);
+    setTimeout(() => $("wizSearch").focus(), 60);
+    track("action", { name: "wizardOpen", detail: "" });
   }
-  function tickClocks() {
-    const now = new Date();
-    try { $("clkTehran").textContent = now.toLocaleTimeString("fa-IR", { timeZone: "Asia/Tehran", hour12: false }); } catch (e) {}
-    $("clkLocal").textContent = now.toLocaleTimeString("fa-IR", { hour12: false });
+  function closeWizard() {
+    $("wizDlg").classList.remove("on");
+    $("wizDlg").setAttribute("aria-hidden", "true");
+    document.body.style.overflow = "";
   }
-  function opToggle() {
-    if (S.opTimer) { clearInterval(S.opTimer); S.opTimer = null; $("opBtn").textContent = "شروع"; $("opT").textContent = "00:00"; return; }
-    const mins = clamp(+$("opM").value || 1, 1, 240);
-    S.opEnd = Date.now() + mins * 60000;
-    $("opBtn").textContent = "توقف";
-    const tick = () => {
-      const s = Math.max(0, Math.round((S.opEnd - Date.now()) / 1000));
-      $("opT").textContent = String(Math.floor(s / 60)).padStart(2, "0") + ":" + String(s % 60).padStart(2, "0");
-      if (!s) {
-        clearInterval(S.opTimer); S.opTimer = null;
-        $("opBtn").textContent = "شروع";
-        playSound("warn"); vibrate(300);
-        toast("⏰ زمان عملیات تمام شد");
-      }
-    };
-    tick();
-    S.opTimer = setInterval(tick, 250);
+  function wizNextAction() {
+    if (wiz.step < 3) return wizGo(wiz.step + 1);
+    closeWizard();
+    build();
   }
-  const aim = { hits: 0, miss: 0, left: 20 };
-  function aimSpawn() {
-    const f = $("aim");
-    f.innerHTML = '<button class="tg" aria-label="هدف"></button>';
-    const t = f.firstChild;
-    t.style.left = (8 + Math.random() * 80) + "%";
-    t.style.top = (10 + Math.random() * 74) + "%";
+
+  /* ============================== service incidents ============================== */
+  const STATUS_FA = { ok: "سرویس آماده است", degraded: "سرویس کمی کند است", down: "سرویس قطع است" };
+  function pushReady() { return ("Notification" in window) && ("PushManager" in window) && ("serviceWorker" in navigator); }
+  function renderIncident(d) {
+    const box = $("incidentBanner");
+    if (!box) return;
+    const inc = d && d.incident;
+    const notice = d && d.notice;
+    const overall = d && d.overall;
+    let level = "ok", key = "", title = "", body = "";
+    if (inc) {
+      level = inc.level === "down" ? "down" : "degraded";
+      key = "inc:" + inc.id;
+      title = inc.title;
+      body = inc.body || "";
+      if (inc.started) body = (body ? body + " • " : "") + "شروع: " + dateStr(inc.started);
+    } else if (notice && (notice.level !== "ok" || notice.text)) {
+      level = notice.level === "down" ? "down" : "degraded";
+      key = "notice:" + String(notice.text || "").slice(0, 60);
+      title = "اطلاعیه سرویس";
+      body = notice.text || "";
+    } else if (overall && overall !== "ok") {
+      level = overall === "down" ? "down" : "degraded";
+      key = "overall:" + overall;
+      title = STATUS_FA[overall] || "وضعیت سرویس";
+      body = "اگر وصل نمی‌شوی چند دقیقه صبر کن و دوباره امتحان کن.";
+    }
+    if (!level || level === "ok" || !key || store.get("IMRC_inc_hidden", "") === key) { box.hidden = true; return; }
+    S.incKey = key;
+    box.hidden = false;
+    box.dataset.level = level;
+    $("incidentTitle").textContent = (level === "down" ? "🔴 " : "🟠 ") + (title || "وضعیت سرویس");
+    $("incidentBody").textContent = body;
+    if ($("incidentPush")) $("incidentPush").hidden = !pushReady();
   }
-  function aimStart() {
-    if (S.aimOn) return;
-    S.aimOn = true;
-    $("aimBtn").disabled = true;
-    aim.hits = 0; aim.miss = 0; aim.left = 20;
-    aimSpawn();
-    $("aimS").textContent = "زمان " + fa(aim.left) + " • هدف " + fa(0);
-    S.aimTimer = setInterval(aimTick, 1000);
-  }
-  function aimTick() {
-    aim.left--;
-    if (aim.left > 0) { $("aimS").textContent = "زمان " + fa(aim.left) + " • هدف " + fa(aim.hits); return; }
-    clearInterval(S.aimTimer); S.aimTimer = null;
-    S.aimOn = false;
-    $("aimBtn").disabled = false;
-    $("aim").innerHTML = "";
-    const best = Math.max(aim.hits, store.get("IMRC_aim", 0));
-    store.set("IMRC_aim", best);
-    const acc = aim.hits + aim.miss ? Math.round((aim.hits / (aim.hits + aim.miss)) * 100) : 0;
-    $("aimS").textContent = fa(aim.hits) + " هدف • دقت " + fa(acc) + "٪ • بهترین " + fa(best);
-    renderStats();
-  }
-  /* aim field click routing (installed once in bindEvents) */
-  function aimClick(e) {
-    if (!S.aimOn) return;
-    if (e.target.closest(".tg")) { aim.hits++; aimSpawn(); }
-    else aim.miss++;
+  function incidentHide() {
+    if (S.incKey) store.set("IMRC_inc_hidden", S.incKey);
+    $("incidentBanner").hidden = true;
   }
 
   /* ============================== chat (support) ============================== */
@@ -1177,8 +1157,10 @@
       const d = await r.json();
       const [t, c] = map[d.overall] || ["سرویس: نامشخص", "warn"];
       pills.forEach((p, i) => { if (!p) return; p.textContent = i === 2 ? t.replace("سرویس: ", "") : t; p.className = "pill " + c; });
+      renderIncident(d);
     } catch (e) {
       pills.forEach((p, i) => { if (!p) return; p.textContent = i === 2 ? "نامشخص" : "سرویس: نامشخص"; p.className = "pill warn"; });
+      renderIncident(null);
     }
   }
   function renderStart() {
@@ -1217,7 +1199,7 @@
     dlgOpen("پیشنهاد کشور",
       '<label class="label" for="sugPrio">اولویت تو چیست؟</label>' +
       '<select id="sugPrio" class="input" data-act-change="suggest" style="margin:.4rem 0 .8rem">' +
-      '<option value="fast">کمترین پینگ</option><option value="codm">بهترین برای رنکد کالاف</option><option value="balanced">متعادل (پینگ زیر ۶۰ و مناسب کالاف)</option></select>' +
+      '<option value="fast">کمترین پینگ</option><option value="codm">مناسب بازی رقابتی</option><option value="balanced">متعادل (پینگ زیر ۶۰)</option></select>' +
       '<div id="sugOut" class="list"></div>');
     suggestRun();
   }
@@ -1230,7 +1212,7 @@
     if (p === "balanced") { const b = list.filter((c) => c.codm && c.ping <= 60); list = b.length ? b : list; }
     list.sort((a, b) => a.ping - b.ping);
     $("sugOut").innerHTML = list.slice(0, 3).map((c, i) =>
-      `<div class="item"><div><b>${i + 1}. ${esc(c.flag + " " + c.name)}</b><div class="meta">پینگ پایه ${fa(c.ping)} ms${c.codm ? " • مناسب کالاف" : ""}</div></div>
+      `<div class="item"><div><b>${i + 1}. ${esc(c.flag + " " + c.name)}</b><div class="meta">پینگ پایه ${fa(c.ping)} ms${c.codm ? " • مناسب بازی رقابتی" : ""}</div></div>
        <button class="btn sm" data-act="pick" data-code="${c.code}">انتخاب</button></div>`).join("") || '<p class="hint">موردی نیست.</p>';
   }
   function pick(code) {
@@ -1285,7 +1267,7 @@
     const win = a.ping === b.ping ? "پینگ هر دو برابر است" : (a.ping < b.ping ? a.name : b.name) + " کم‌پینگ‌تر است";
     $("cmpOut").innerHTML = '<table class="check-list" style="width:100%;border-collapse:collapse"><tr><th></th><th>' + esc(a.name) + "</th><th>" + esc(b.name) + "</th></tr>" +
       row("پینگ پایه", fa(a.ping) + " ms", fa(b.ping) + " ms") +
-      row("مناسب کالاف", a.codm ? "بله" : "خیر", b.codm ? "بله" : "خیر") +
+      row("مناسب بازی رقابتی", a.codm ? "بله" : "خیر", b.codm ? "بله" : "خیر") +
       row("بازی‌ها", esc(a.games.join("، ")), esc(b.games.join("، "))) +
       '</table><p class="hint" style="margin-top:.6rem"><b>' + esc(win) + "</b>. پینگ‌ها تخمینی‌اند؛ برای سنجش واقعی از تست پینگ استفاده کن.</p>";
   }
@@ -1370,10 +1352,8 @@
   /* ============================== commands ============================== */
   const COMMANDS = [
     { label: "⚡ ساخت و دانلود کانفیگ", run: () => build() },
-    { label: "🎯 یک‌کلیک بهینه کالاف", run: () => codmOptimize() },
     { label: "🏠 خانه", run: () => go("home") },
     { label: "⚡ ساخت کانفیگ", run: () => go("build") },
-    { label: "🎯 ابزارهای کالاف", run: () => go("codm") },
     { label: "🧰 ابزارهای کمکی", run: () => go("tools") },
     { label: "📊 آمار و سوابق", run: () => go("stats") },
     { label: "💬 پشتیبانی آنلاین", run: () => go("support") },
@@ -1417,7 +1397,6 @@
     preset: (el) => applyPreset(el.dataset.preset),
     role: (el) => setRole(el.dataset.role),
     mtu: (el) => { setMtu(el.dataset.mtu); toast("MTU روی " + fa(el.dataset.mtu) + " تنظیم شد"); },
-    codmOpt: () => codmOptimize(),
     autoName: () => { setName(autoName()); updateSummary(); playSound("click"); },
     favOnly: (el) => { S.favOnly = !S.favOnly; el.setAttribute("aria-pressed", String(S.favOnly)); renderServers(); },
     copyAll: () => copyLast("config"),
@@ -1455,15 +1434,15 @@
     suggest: () => suggestDialog(),
     hideStart: () => hideStart(),
     showStart: () => showStart(),
-    // codm
-    ttk: () => ttk(),
-    matchK: () => { S.kills++; renderMatches(); },
-    matchD: () => { S.deaths++; renderMatches(); },
-    matchWin: () => logMatch(true),
-    matchLose: () => logMatch(false),
-    matchReset: () => { if (!matchList().length) return; if (confirm("تاریخچه‌ی مچ‌ها پاک شود؟")) { store.del("IMRC_matches"); renderMatches(); renderStats(); } },
-    opStart: () => opToggle(),
-    aimStart: () => aimStart(),
+    // wizard
+    wizOpen: () => openWizard(),
+    wizClose: () => closeWizard(),
+    wizBack: () => wizGo(wiz.step - 1),
+    wizNext: () => wizNextAction(),
+    wizMode: (el) => { setMode(el.dataset.mode); wizSummary(); },
+    wizRole: (el) => { setRole(el.dataset.role); wizSummary(); },
+    wizMtu: (el) => { setMtu(el.dataset.mtu); wizMarkMtu(); wizSummary(); },
+    incidentHide: () => incidentHide(),
     // tools
     pingRun: () => pingRun(),
     netRefresh: () => netInfo(),
@@ -1501,6 +1480,8 @@
       if (fav) { e.preventDefault(); e.stopPropagation(); toggleFav(fav.dataset.fav); return; }
       const srv = e.target.closest("#srvList .srv");
       if (srv) { selectServer(srv.dataset.code); return; }
+      const wz = e.target.closest("[data-wiz]");
+      if (wz) { wizPick(wz.dataset.wiz); return; }
       const act = e.target.closest("[data-act]");
       if (act && ACTIONS[act.dataset.act]) {
         if (act.tagName === "A") e.preventDefault();
@@ -1540,9 +1521,7 @@
         return;
       }
       if (t.id === "cfgName") { t.value = imrcName(t.value); updateSummary(); return; }
-      if (t.id === "seasonDate") { store.set("IMRC_season", t.value); seasonLeft(); return; }
       if (["mtuSel", "dnsSel", "useDns", "useMtu", "cfgUsers", "mtuCustom"].includes(t.id)) updateSummary();
-      if (t.dataset.slot) saveSlots(t.dataset.slot);
     });
     document.addEventListener("input", (e) => {
       const t = e.target;
@@ -1552,7 +1531,6 @@
       else if (t.id === "chatIn") chatCount();
       else if (t.id === "notesText") { store.set("IMRC_notes", t.value.slice(0, 5000)); }
       else if (t.id === "mtuCustom") updateSummary();
-      else if (t.dataset.slot) saveSlots(t.dataset.slot);
       else if (t.id === "cmdInput") paletteFilter();
     });
     document.addEventListener("keydown", (e) => {
@@ -1564,12 +1542,14 @@
         else if (e.key === "ArrowUp") { e.preventDefault(); cmdIdx = Math.max(cmdIdx - 1, 0); paletteRender(); }
         else if (e.key === "Enter") { e.preventDefault(); paletteRun(cmdIdx); }
       }
+      if (e.key === "Escape" && $("wizDlg").classList.contains("on")) { e.preventDefault(); closeWizard(); return; }
       if (e.target && e.target.id === "chatIn" && e.key === "Enter" && !e.shiftKey) { e.preventDefault(); chatSend(); }
-      if (e.target && e.target.dataset && e.target.dataset.slot === undefined && e.target.classList && e.target.classList.contains("srv") && (e.key === "Enter" || e.key === " ")) {
+      if (e.target && e.target.dataset && e.target.classList && e.target.classList.contains("srv") && (e.key === "Enter" || e.key === " ")) {
         e.preventDefault(); selectServer(e.target.dataset.code);
       }
     });
-    $("aim").addEventListener("click", aimClick);
+    $("wizSearch").addEventListener("input", wizRender);
+    $("wizDlg").addEventListener("click", (e) => { if (e.target.id === "wizDlg") closeWizard(); });
     $("cmdList").addEventListener("mousemove", (e) => {
       const b = e.target.closest("[data-idx]");
       if (b && +b.dataset.idx !== cmdIdx) { cmdIdx = +b.dataset.idx; paletteRender(); }
@@ -1587,20 +1567,15 @@
     renderThemes();
     applyPrefs();
     bindEvents();
-    renderSlots();
     renderChecklist();
     renderTrouble();
     renderGloss();
     fillCompare();
-    const season = store.get("IMRC_season", "");
-    if (season) $("seasonDate").value = season;
-    seasonLeft();
     $("cfgName").value = "";
     setMode(S.mode);
     setRole(S.role);
     renderServers();
     renderHistory();
-    renderMatches();
     renderStats();
     renderFaq();
     renderStart();
@@ -1609,8 +1584,6 @@
     const savedGoal = store.get("IMRC_goal", null);
     if (savedGoal != null) $("goalInput").value = savedGoal;
     // شکل صفحه‌ی ساخت: بعد از تست پینگ، هرگز عدد ساختگی نشان نمی‌دهیم
-    tickClocks();
-    setInterval(tickClocks, 1000);
     applyShared();
     go(pageFromHash() || "home", { silent: true });
     loadQuota();
