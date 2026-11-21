@@ -5,13 +5,13 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"/>
 <meta name="robots" content="noindex"/>
 <meta name="theme-color" content="#08050f"/>
-<meta name="description" content="پنل IMRC: ساخت کانفیگ WireGuard برای کالاف، سرورها، ابزارها، پشتیبانی آنلاین و راهنما."/>
+<meta name="description" content="پنل IMRC: ساخت کانفیگ WireGuard، انتخاب سرور، کیف پول، پشتیبانی آنلاین و راهنما."/>
 <link rel="manifest" href="/manifest.webmanifest"/>
 <link rel="apple-touch-icon" href="/icons/apple-touch-icon.png"/>
 <meta name="apple-mobile-web-app-capable" content="yes"/>
 <meta name="apple-mobile-web-app-title" content="IMRC"/>
 <link rel="stylesheet" href="/panel.css"/>
-<title>IMRC • پنل کانفیگ کالاف</title>
+<title>IMRC • ساخت کانفیگ WireGuard</title>
 </head>
 <body>
 <a class="skip" href="#content">رفتن به محتوا</a>
@@ -21,14 +21,13 @@
   <aside class="side" id="side" aria-label="منوی اصلی">
     <div class="brand">
       <div class="logo" aria-hidden="true">IMRC</div>
-      <div><b>پنل IMRC</b><small>کانفیگ WireGuard برای کالاف</small></div>
+      <div><b>پنل IMRC</b><small>ساخت کانفیگ WireGuard</small></div>
     </div>
     <nav class="nav" aria-label="بخش‌های پنل">
       <div class="nav-g">شروع</div>
       <button class="nav-i" data-page="home"><span class="ni" aria-hidden="true">🏠</span>خانه</button>
       <div class="nav-g">ساخت و ابزار</div>
-      <button class="nav-i" data-page="build"><span class="ni" aria-hidden="true">⚡</span>ساخت کانفیگ</button>
-      <button class="nav-i" data-page="codm"><span class="ni" aria-hidden="true">🎯</span>ابزارهای کالاف</button>
+      <button class="nav-i nav-cta" data-page="build"><span class="ni" aria-hidden="true">⚡</span><span class="cta-text">ساخت کانفیگ<small>ساخت و دانلود فایل</small></span></button>
       <button class="nav-i" data-page="tools"><span class="ni" aria-hidden="true">🧰</span>ابزارهای کمکی</button>
       <div class="nav-g">حساب من</div>
       <button class="nav-i" data-page="stats"><span class="ni" aria-hidden="true">📊</span>آمار و سوابق</button>
@@ -60,14 +59,37 @@
       </div>
     </div>
 
+    <div class="incident" id="incidentBanner" role="status" aria-live="polite" hidden>
+      <span class="incident-dot" aria-hidden="true"></span>
+      <div class="incident-text"><b id="incidentTitle">—</b><small id="incidentBody"></small></div>
+      <div class="incident-actions">
+        <button class="btn sm" data-act="push" id="incidentPush">🔔 اعلان وضعیت</button>
+        <a class="btn sm ghost" href="/status.html" target="_blank" rel="noopener">جزئیات</a>
+        <button class="icon-btn" data-act="incidentHide" aria-label="بستن اعلان وضعیت">✕</button>
+      </div>
+    </div>
+
     <main class="content" id="content" tabindex="-1">
 
       <!-- ================= HOME ================= -->
       <section class="page" id="page-home" data-title="خانه">
         <div class="page-h">
           <h1>خوش اومدی 👋</h1>
-          <p>اینجا کانفیگ WireGuard آماده‌ی کالاف می‌سازی، فایل را دانلود می‌کنی و در اپ WireGuard وصل می‌شوی.</p>
+          <p>اینجا کانفیگ WireGuard می‌سازی، فایل را دانلود می‌کنی و در اپ WireGuard وصل می‌شوی.</p>
         </div>
+        <section class="build-hero" aria-labelledby="buildHeroTitle">
+          <div class="build-hero-glow" aria-hidden="true"></div>
+          <div class="build-hero-body">
+            <span class="build-hero-kicker">⚡ اصلی‌ترین بخش پنل</span>
+            <h2 id="buildHeroTitle">کانفیگ WireGuard بساز</h2>
+            <p>سرور را انتخاب کن، تنظیمات بازی را بگذار و در چند ثانیه فایل <code>.conf</code> آماده را دانلود کن.</p>
+            <div class="build-hero-actions">
+              <button class="btn primary build-hero-btn" data-act="wizOpen">شروع ساخت کانفیگ <span aria-hidden="true">←</span></button>
+              <button class="btn build-hero-ghost" data-page="build">صفحه کامل ساخت</button>
+            </div>
+          </div>
+          <div class="build-hero-art" aria-hidden="true"><span>WG</span></div>
+        </section>
         <div class="row spread" style="margin-bottom:.8rem">
           <span></span>
           <button class="btn sm" id="bxShowBtn" data-act="showStart" hidden>📘 نمایش راهنمای شروع</button>
@@ -117,7 +139,7 @@
             <ul class="stack" style="padding-inline-start:1.2rem;margin-top:.5rem">
               <li>ساخت فایل کانفیگ WireGuard برای بازی، در چند کلیک</li>
               <li>پیدا کردن سرور با کمترین پینگ و مقایسه‌ی کشورها</li>
-              <li>ابزارهای کالاف: تنظیمات آماده، ماشین‌حساب TTK و ثبت مچ</li>
+              <li>پیشنهاد سرور مناسب بازی و مقایسه‌ی پینگ</li>
               <li>نگهداری فایل کانفیگ تا ۳۰ روز و پشتیبانی آنلاین</li>
             </ul>
           </details>
@@ -161,8 +183,13 @@
       <!-- ================= BUILD ================= -->
       <section class="page" id="page-build" data-title="ساخت کانفیگ">
         <div class="page-h">
-          <h1>ساخت کانفیگ</h1>
-          <p>سه مرحله: سرور را انتخاب کن، تنظیمات را تعیین کن و فایل را بساز. فایل <code>.conf</code> دانلود می‌شود.</p>
+          <div class="page-h-row">
+            <div>
+              <h1>ساخت کانفیگ</h1>
+              <p>سه مرحله: سرور را انتخاب کن، تنظیمات را تعیین کن و فایل را بساز. فایل <code>.conf</code> دانلود می‌شود.</p>
+            </div>
+            <button class="btn primary" data-act="wizOpen">✨ ویزارد سریع ساخت</button>
+          </div>
         </div>
         <div class="banner warn" id="pingWarn" hidden>پینگ این سرور بالاست؛ برای رنکد توصیه نمی‌شود. سرور دیگری از فهرست انتخاب کن.</div>
 
@@ -173,7 +200,7 @@
             <div class="search"><input class="input" id="srvSearch" type="search" placeholder="جستجوی کشور یا کد (مثلاً tr)" aria-label="جستجوی کشور"/></div>
             <div class="row" style="margin:.6rem 0">
               <button class="chip" id="favOnly" aria-pressed="false" data-act="favOnly">فقط ستاره‌دارها</button>
-              <span class="hint">پیشنهاد کالاف:</span>
+              <span class="hint">پیشنهاد سریع:</span>
               <div class="row" id="recRow" style="gap:.3rem"></div>
             </div>
             <div class="list" id="srvList" role="listbox" aria-label="فهرست سرورها"></div>
@@ -229,7 +256,7 @@
                   <div class="field">
                     <label for="dnsSel">DNS گیمینگ</label>
                     <select class="input" id="dnsSel">
-                      <option value="10.202.10.10, 78.157.42.101">الکترو (پیشنهادی کالاف)</option>
+                      <option value="10.202.10.10, 78.157.42.101">الکترو (پیشنهادی)</option>
                       <option value="1.1.1.1, 1.0.0.1">Cloudflare</option>
                       <option value="8.8.8.8, 8.8.4.4">Google</option>
                       <option value="94.140.14.14, 94.140.15.15">AdGuard</option>
@@ -302,106 +329,6 @@
                 </div>
               </div>
             </div>
-          </section>
-        </div>
-      </section>
-
-      <!-- ================= CODM ================= -->
-      <section class="page" id="page-codm" data-title="ابزارهای کالاف">
-        <div class="page-h">
-          <h1>ابزارهای کالاف</h1>
-          <p>نقش، تنظیمات دستگاه، ماشین‌حساب TTK، ثبت مچ، تیم و لودات. همه‌ی این ابزارها روی همین مرورگر کار می‌کنند.</p>
-        </div>
-
-        <div class="grid-2">
-          <section class="card">
-            <div class="card-h"><div><h2>نقش و تنظیمات سریع</h2><p>نقش و MTU را این‌جا هم می‌توانی عوض کنی؛ با صفحه‌ی ساخت هماهنگ است.</p></div></div>
-            <div class="stack">
-              <div class="field">
-                <span class="label">نقش در تیم</span>
-                <div class="lbl-grid" aria-label="نقش در تیم">
-                  <button class="chip" data-act="role" data-role="attacker" aria-pressed="true"><b>Attacker</b> تهاجمی</button>
-                  <button class="chip" data-act="role" data-role="defender" aria-pressed="false"><b>Defender</b> دفاعی</button>
-                  <button class="chip" data-act="role" data-role="support" aria-pressed="false"><b>Support</b> پشتیبانی</button>
-                </div>
-              </div>
-              <div class="lbl-grid">
-                <button class="btn" data-act="mtu" data-mtu="1280">دستگاه ضعیف (MTU 1280)</button>
-                <button class="btn" data-act="mtu" data-mtu="1420">دستگاه پرچم‌دار (MTU 1420)</button>
-                <button class="btn" data-act="preset" data-preset="tournament">حالت تورنمنت</button>
-                <button class="btn primary" data-act="codmOpt">یک‌کلیک بهینه و ساخت</button>
-              </div>
-              <p class="hint">«یک‌کلیک بهینه»: رنکد، ترکیه، نقش تهاجمی، MTU ۱۲۸۰، DNS الکترو و ساخت فایل. قبلش مطمئن شو اینترنتت وصل است.</p>
-            </div>
-          </section>
-
-          <section class="card">
-            <div class="card-h"><div><h2>ساعت و فصل</h2><p>ساعت تهران و ساعت محلی، و روزهای باقی‌مانده تا پایان فصل.</p></div></div>
-            <div class="grid-2">
-              <div class="kpi"><span>تهران</span><b id="clkTehran" class="mono">--:--:--</b></div>
-              <div class="kpi"><span>ساعت محلی</span><b id="clkLocal" class="mono">--:--:--</b></div>
-            </div>
-            <div class="field" style="margin-top:.9rem">
-              <label for="seasonDate">تاریخ پایان فصل</label>
-              <input class="input" id="seasonDate" type="date" style="max-width:14rem"/>
-              <span class="hint" id="seasonLeft">تاریخ را وارد کن تا روزهای باقی‌مانده نشان داده شود.</span>
-            </div>
-          </section>
-        </div>
-
-        <div class="grid-2" style="margin-top:1rem">
-          <section class="card">
-            <div class="card-h"><div><h2>ماشین‌حساب TTK</h2><p>زمان کشتن هدف = (تعداد گلوله − ۱) × ۶۰۰۰۰ ÷ RPM میلی‌ثانیه</p></div></div>
-            <div class="grid-3">
-              <div class="field"><label for="ttkDmg">دمیج هر گلوله</label><input class="input" id="ttkDmg" type="number" min="1" inputmode="numeric"/></div>
-              <div class="field"><label for="ttkRpm">RPM سلاح</label><input class="input" id="ttkRpm" type="number" min="1" inputmode="numeric"/></div>
-              <div class="field"><label for="ttkHp">جان هدف</label><input class="input" id="ttkHp" type="number" min="1" value="100" inputmode="numeric"/></div>
-            </div>
-            <div class="row" style="margin-top:.8rem"><button class="btn primary" data-act="ttk">محاسبه</button><span class="verdict" id="ttkOut" hidden></span></div>
-          </section>
-
-          <section class="card">
-            <div class="card-h"><div><h2>ثبت مچ</h2><p>کیل و دث این مچ را بزن، بعد نتیجه را ثبت کن.</p></div><button class="btn sm ghost" data-act="matchReset">پاک کردن تاریخچه</button></div>
-            <div class="grid-2">
-              <button class="btn" data-act="matchK">+ کیل</button>
-              <button class="btn" data-act="matchD">+ دث</button>
-              <button class="btn primary" data-act="matchWin">ثبت برد ✓</button>
-              <button class="btn" data-act="matchLose">ثبت باخت ✗</button>
-            </div>
-            <p class="tool-val" style="margin:.8rem 0 .3rem;font-size:1.2rem" id="matchCounts">این مچ: K 0 · D 0</p>
-            <div class="list" id="matchLog"></div>
-          </section>
-        </div>
-
-        <div class="grid-2" style="margin-top:1rem">
-          <section class="card">
-            <div class="card-h"><div><h2>تیم</h2><p>اسم هم‌تیمی‌ها؛ فقط روی همین مرورگر ذخیره می‌شود.</p></div></div>
-            <div class="grid-2" id="teamInputs"></div>
-          </section>
-          <section class="card">
-            <div class="card-h"><div><h2>لودات</h2><p>سلاح و پرک‌های خودت را این‌جا یادداشت کن.</p></div></div>
-            <div class="stack" id="loadoutInputs"></div>
-          </section>
-        </div>
-
-        <div class="grid-2" style="margin-top:1rem">
-          <section class="card">
-            <div class="card-h"><div><h2>تایمر عملیات</h2><p>یادآور زمان بازی یا تمرین.</p></div></div>
-            <div class="row spread">
-              <span class="tool-val" id="opT">00:00</span>
-              <div class="row">
-                <input class="input" id="opM" type="number" min="1" max="240" value="15" aria-label="دقیقه" style="max-width:6rem"/>
-                <button class="btn primary" data-act="opStart" id="opBtn">شروع</button>
-              </div>
-            </div>
-          </section>
-          <section class="card">
-            <div class="card-h"><div><h2>تمرین هدف‌گیری (۲۰ ثانیه)</h2><p>روی هدف‌ها کلیک کن؛ کلیک بیرون از هدف، خطا حساب می‌شود.</p></div></div>
-            <div class="row spread" style="margin-bottom:.6rem">
-              <button class="btn primary" data-act="aimStart" id="aimBtn">شروع</button>
-              <span class="hint" id="aimS">بهترین: ۰</span>
-            </div>
-            <div class="aim-field" id="aim" aria-label="میدان تمرین هدف‌گیری"></div>
           </section>
         </div>
       </section>
@@ -576,7 +503,7 @@
             <dl class="gloss" id="glossary"></dl>
           </section>
           <section class="card">
-            <div class="card-h"><div><h2>مقایسه‌ی دو کشور</h2><p>پینگ پایه و مناسب بودن برای کالاف.</p></div></div>
+            <div class="card-h"><div><h2>مقایسه‌ی دو کشور</h2><p>پینگ پایه و مناسب بودن برای بازی.</p></div></div>
             <div class="grid-2">
               <select class="input" id="cmpA" aria-label="کشور اول"></select>
               <select class="input" id="cmpB" aria-label="کشور دوم"></select>
@@ -592,7 +519,7 @@
               <li>فایل <code>.conf</code> را از «ساخت کانفیگ» دانلود کن.</li>
               <li>اپ رسمی WireGuard را نصب کن (Google Play یا wireguard.com).</li>
               <li>در اپ گزینه‌ی Import یا Add a tunnel را بزن و فایل را انتخاب کن.</li>
-              <li>تونل را روشن کن؛ بعد برای امتحان کالاف را باز کن.</li>
+              <li>تونل را روشن کن؛ بعد اتصال اینترنتت را تست کن.</li>
             </ol>
             <div class="row" style="margin-top:.8rem">
               <button class="btn" data-act="printGuide">چاپ راهنمای سریع</button>
@@ -690,8 +617,8 @@
 <!-- mobile bottom navigation -->
 <nav class="bottom-nav" aria-label="ناوبری سریع">
   <button data-page="home"><span class="ico" aria-hidden="true">🏠</span>خانه</button>
-  <button data-page="build"><span class="ico" aria-hidden="true">⚡</span>ساخت</button>
-  <button data-page="codm"><span class="ico" aria-hidden="true">🎯</span>کالاف</button>
+  <button class="bottom-build" data-page="build"><span class="ico" aria-hidden="true">⚡</span>ساخت کانفیگ</button>
+  <button data-page="tools"><span class="ico" aria-hidden="true">🧰</span>ابزارها</button>
   <button data-page="stats"><span class="ico" aria-hidden="true">📊</span>آمار</button>
   <button data-page="support"><span class="ico" aria-hidden="true">💬</span>پشتیبانی<span class="count" data-chat-badge hidden>۰</span></button>
   <button data-act="palette"><span class="ico" aria-hidden="true">☰</span>بیشتر</button>
@@ -710,6 +637,66 @@
   <div class="dialog" style="width:min(520px,100%)">
     <input class="input" id="cmdInput" placeholder="دنبال چه می‌گردی؟ مثلاً: ساخت، تم، پشتیبانی" aria-label="جستجوی دستورها" autocomplete="off"/>
     <div class="palette-list" id="cmdList" role="listbox"></div>
+  </div>
+</div>
+
+
+<!-- build wizard -->
+<div class="overlay" id="wizDlg" role="dialog" aria-modal="true" aria-labelledby="wizTitle" aria-hidden="true">
+  <div class="dialog wiz">
+    <div class="wiz-head">
+      <div class="wiz-titles"><span class="wiz-kicker">⚡ ویزارد ساخت کانفیگ</span><b id="wizTitle">مرحله ۱ از ۳ — انتخاب سرور</b></div>
+      <button class="icon-btn" data-act="wizClose" aria-label="بستن ویزارد">✕</button>
+    </div>
+    <div class="wiz-progress" aria-hidden="true"><i id="wizBar" style="width:33%"></i></div>
+
+    <div class="wiz-body">
+      <section id="wizStep1">
+        <p class="hint">سروری با کمترین پینگ انتخاب شده است؛ می‌توانی عوضش کنی.</p>
+        <div class="search" style="margin-top:.5rem"><input class="input" id="wizSearch" type="search" placeholder="جستجوی کشور یا کد (مثلاً tr)" aria-label="جستجوی کشور در ویزارد"/></div>
+        <div class="row" style="margin:.6rem 0"><span class="hint">پیشنهاد خودکار:</span><div class="row" id="wizRec" style="gap:.3rem"></div></div>
+        <div class="list wiz-list" id="wizSrv" role="listbox" aria-label="فهرست سرورهای ویزارد"></div>
+      </section>
+
+      <section id="wizStep2" hidden>
+        <div class="field">
+          <span class="label">حالت بازی</span>
+          <div class="seg" role="group" aria-label="حالت بازی در ویزارد">
+            <button data-act="wizMode" data-mode="ranked" aria-pressed="true">رنکد</button>
+            <button data-act="wizMode" data-mode="br" aria-pressed="false">بتل‌رویال</button>
+            <button data-act="wizMode" data-mode="mp" aria-pressed="false">مالتی‌پلیر</button>
+          </div>
+        </div>
+        <div class="field" style="margin-top:.9rem">
+          <span class="label">نقش</span>
+          <div class="lbl-grid" role="group" aria-label="نقش در ویزارد">
+            <button class="chip" data-act="wizRole" data-role="attacker" aria-pressed="true"><b>Attacker</b> تهاجمی</button>
+            <button class="chip" data-act="wizRole" data-role="defender" aria-pressed="false"><b>Defender</b> دفاعی</button>
+            <button class="chip" data-act="wizRole" data-role="support" aria-pressed="false"><b>Support</b> پشتیبانی</button>
+          </div>
+        </div>
+        <div class="field" style="margin-top:.9rem">
+          <span class="label">MTU</span>
+          <div class="lbl-grid">
+            <button class="chip" data-act="wizMtu" data-mtu="1280" aria-pressed="false">۱۲۸۰ — پایدار</button>
+            <button class="chip" data-act="wizMtu" data-mtu="1350" aria-pressed="false">۱۳۵۰</button>
+            <button class="chip" data-act="wizMtu" data-mtu="1400" aria-pressed="true">۱۴۰۰ — متعادل</button>
+            <button class="chip" data-act="wizMtu" data-mtu="1420" aria-pressed="false">۱۴۲۰ — سریع</button>
+          </div>
+        </div>
+        <div class="wiz-summary" id="wizSummary1"></div>
+      </section>
+
+      <section id="wizStep3" hidden>
+        <div class="wiz-summary big" id="wizSummary2"></div>
+        <p class="hint">فایل <code>.conf</code> ساخته و دانلود می‌شود و ۳۰ روز در حساب تو می‌ماند. بعد از دانلود، آن را در اپ WireGuard Import کن.</p>
+      </section>
+    </div>
+
+    <div class="wiz-foot">
+      <button class="btn" id="wizBack" data-act="wizBack" hidden>مرحله قبل</button>
+      <button class="btn primary" id="wizNext" data-act="wizNext">مرحله بعد</button>
+    </div>
   </div>
 </div>
 
