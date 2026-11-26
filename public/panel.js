@@ -295,6 +295,8 @@
   }
   function go(page, opts) {
     if (!PAGES[page]) page = "home";
+    const tr = $(".page-transition");
+    if (tr && !opts?.silent) { tr.classList.add("active"); setTimeout(() => tr.classList.remove("active"), 500); }
     opts = opts || {};
     $$(".page").forEach((p) => p.classList.toggle("active", p.id === "page-" + page));
     $$(".nav-i[data-page], .bottom-nav [data-page]").forEach((b) => {
@@ -1700,6 +1702,7 @@
 
   /* ============================== init ============================== */
   function init() {
+    initModernEffects();
     applyFont(store.get("IMRC_font", 15));
     renderThemes();
     applyPrefs();
@@ -1734,6 +1737,79 @@
     setInterval(() => { if (!document.hidden) track("ping"); }, 30000);
     document.addEventListener("visibilitychange", () => { if (!document.hidden) track("ping"); });
     if ("serviceWorker" in navigator) window.addEventListener("load", () => navigator.serviceWorker.register("/sw.js").catch(() => {}));
+  }
+
+  /* ============================== modern effects ============================== */
+  function initModernEffects() {
+    // Scroll reveal
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach((entry) => {
+        if (entry.isIntersecting) {
+          entry.target.classList.add("active");
+          observer.unobserve(entry.target);
+        }
+      });
+    }, { threshold: 0.1, rootMargin: "0px 0px -50px 0px" });
+    $$(".card, .page-h, .wiz, .incident, .build-hero").forEach((el) => {
+      el.classList.add("reveal");
+      observer.observe(el);
+    });
+
+    // Cursor glow follower
+    const glow = document.createElement("div");
+    glow.className = "cursor-glow";
+    document.body.appendChild(glow);
+    let mouseX = 0, mouseY = 0, glowX = 0, glowY = 0;
+    document.addEventListener("mousemove", (e) => { mouseX = e.clientX; mouseY = e.clientY; glow.classList.add("active"); });
+    document.addEventListener("mouseleave", () => { glow.classList.remove("active"); });
+    function animateGlow() {
+      glowX += (mouseX - glowX) * 0.15;
+      glowY += (mouseY - glowY) * 0.15;
+      glow.style.left = glowX + "px";
+      glow.style.top = glowY + "px";
+      requestAnimationFrame(animateGlow);
+    }
+    animateGlow();
+
+    // Magnetic buttons
+    $$(".btn.magnetic, button.magnetic, .build-hero-btn, .nav-i.nav-cta, .bottom-build").forEach((btn) => {
+      btn.addEventListener("mousemove", (e) => {
+        const rect = btn.getBoundingClientRect();
+        const x = e.clientX - rect.left - rect.width / 2;
+        const y = e.clientY - rect.top - rect.height / 2;
+        btn.style.transform = `translate(${x * 0.3}px, ${y * 0.3}px) scale(1.05)`;
+      });
+      btn.addEventListener("mouseleave", () => { btn.style.transform = ""; });
+    });
+
+    // Page transition on nav clicks (delegated via existing click handler)
+    const tr = document.createElement("div");
+    tr.className = "page-transition";
+    tr.innerHTML = '<div class="ring"></div>';
+    document.body.appendChild(tr);
+    function showTransition() { tr.classList.add("active"); }
+    setTimeout(() => tr.classList.remove("active"), 400);
+
+    // Floating particles
+    const particlesContainer = document.createElement("div");
+    particlesContainer.className = "particles";
+    document.body.appendChild(particlesContainer);
+    const particleCount = 22;
+    for (let i = 0; i < particleCount; i++) {
+      const p = document.createElement("div");
+      p.className = "particle";
+      const size = Math.random() * 10 + 4;
+      p.style.width = size + "px";
+      p.style.height = size + "px";
+      p.style.left = Math.random() * 100 + "vw";
+      p.style.top = Math.random() * 100 + "vh";
+      p.style.animationDuration = (Math.random() * 10 + 8) + "s";
+      p.style.animationDelay = (Math.random() * 5) + "s";
+      const hues = ["ff2d95", "22d3ee", "8b5cf6", "ff8a3d"];
+      p.style.background = "color-mix(in srgb, #" + hues[Math.floor(Math.random() * hues.length)] + " 50%, transparent)";
+      p.style.boxShadow = "0 0 15px color-mix(in srgb, #" + hues[Math.floor(Math.random() * hues.length)] + " 70%, transparent)";
+      particlesContainer.appendChild(p);
+    }
   }
 
   init();

@@ -22,8 +22,8 @@ test('CODM tools page, navigation and quick commands are fully removed from the 
 test('build config is the primary action: hero card, sidebar CTA and mobile button', () => {
   assert.match(html, /class="build-hero"/);
   assert.match(html, /id="buildHeroTitle"/);
-  assert.match(html, /class="nav-i nav-cta" data-page="build"/);
-  assert.match(html, /class="bottom-build" data-page="build"/);
+  assert.match(html, /class="nav-i nav-cta magnetic" data-page="build"/);
+  assert.match(html, /class="bottom-build magnetic" data-page="build"/);
   assert.match(html, /data-act="wizOpen"/);
   assert.match(fs.readFileSync('public/panel.css', 'utf8'), /\.nav-i\.nav-cta/);
   assert.match(fs.readFileSync('public/panel.css', 'utf8'), /\.build-hero-btn/);
